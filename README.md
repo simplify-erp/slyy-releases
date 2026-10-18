@@ -19,8 +19,12 @@ to `~/.local/bin`):
 
     curl -fsSL https://raw.githubusercontent.com/simplify-erp/slyy-releases/main/install.sh | sh
 
-Then open a new terminal and run `slyy`. Updates: `slyy update`. CLI releases are the
-`slyy-cli-v*` tags (the "Latest" badge stays with Slyy Desktop).
+Then open a new terminal and run `slyy`. Updates: `slyy update`. Remove: `slyy uninstall`, or
+
+    curl -fsSL https://raw.githubusercontent.com/simplify-erp/slyy-releases/main/install.sh | sh -s -- --uninstall
+
+(your data in ~/.slyy and ~/.work is kept). CLI releases are the `slyy-cli-v*` tags
+(the "Latest" badge stays with Slyy Desktop).
 
 ## Installation
 
