@@ -10,6 +10,10 @@
 #   - ~/.local/bin (added to PATH in ~/.profile, ~/.bashrc, ~/.zshrc, once).
 # Later updates: `slyy update`.
 #
+# Uninstall (binary + the PATH line; ~/.slyy and ~/.work are kept):
+#   curl -fsSL https://raw.githubusercontent.com/simplify-erp/slyy-releases/main/install.sh | sh -s -- --uninstall
+# (or `slyy uninstall`).
+#
 # Environment (all optional):
 #   SLYY_VERSION       install this version (e.g. 0.2.0) instead of the newest
 #   SLYY_INSTALL_DIR   target directory
@@ -27,8 +31,70 @@ TAG_PREFIX="slyy-cli-v"
 say() { printf 'slyy-install: %s\n' "$*"; }
 die() { printf 'slyy-install: error: %s\n' "$*" >&2; exit 1; }
 
+# is_go_slyy FILE: a regular file (not a symlink: npm's TS slyy is one) holding
+# an ELF or Mach-O 64-bit binary, i.e. what this installer put there.
+is_go_slyy() {
+	[ -f "$1" ] && [ ! -L "$1" ] || return 1
+	magic=$(od -An -N4 -tx1 "$1" 2>/dev/null | tr -d ' \n')
+	case "$magic" in
+	7f454c46 | cffaedfe | feedfacf) return 0 ;;
+	esac
+	return 1
+}
+
+# drop_path_line FILE: remove the installer's PATH line ("... # slyy") and the
+# blank line it added before it.
+drop_path_line() {
+	[ -f "$1" ] && grep -qs '# slyy$' "$1" || return 1
+	awk '
+		/# slyy$/ { if (held) held = 0; next }
+		{ if (held) print ""; held = 0 }
+		/^$/ { held = 1; next }
+		{ print }
+		END { if (held) print "" }
+	' "$1" >"$1.slyy-tmp" && cat "$1.slyy-tmp" >"$1" && rm -f "$1.slyy-tmp"
+}
+
+uninstall() {
+	removed=""
+	for dir in ${SLYY_INSTALL_DIR:-} "$HOME/.local/bin" /usr/local/bin; do
+		bin="$dir/slyy"
+		[ -e "$bin" ] || [ -L "$bin" ] || continue
+		if ! is_go_slyy "$bin"; then
+			say "skipped $bin (not an installed slyy binary; e.g. the npm/TS version)"
+			continue
+		fi
+		if rm -f "$bin" 2>/dev/null; then
+			removed="$removed $bin"
+		else
+			say "cannot remove $bin (permissions; try: sudo rm $bin)"
+		fi
+	done
+	cleaned=""
+	if [ "${SLYY_NO_MODIFY_PATH:-}" != 1 ]; then
+		for rc in "$HOME/.profile" "$HOME/.bashrc" "$HOME/.zshrc"; do
+			drop_path_line "$rc" && cleaned="$cleaned ${rc#"$HOME"/}"
+		done
+	fi
+	if [ -n "$removed" ]; then
+		say "removed$removed"
+	else
+		say "no installed slyy binary found"
+	fi
+	[ -z "$cleaned" ] || say "removed the PATH line from:$cleaned"
+	say "kept your data: ~/.slyy (settings, sessions, credentials) and ~/.work (companies); delete them yourself if wanted"
+}
+
 # Wrapped in main so a truncated download (curl | sh) never runs half a script.
 main() {
+	case "${1:-}" in
+	--uninstall)
+		uninstall
+		return 0
+		;;
+	"") ;;
+	*) die "unknown argument '$1' (only --uninstall)" ;;
+	esac
 	# curl protocols: https only (also on redirects); plain http only for a loopback feed (tests)
 	case "$API" in
 	https://*) proto='=https' ;;
