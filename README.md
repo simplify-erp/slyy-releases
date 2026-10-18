@@ -12,6 +12,16 @@ private. https://slyy.ai
   next update; older ones update to 4.10.7 first from
   https://github.com/simplify-erp/noca-releases.
 
+## slyy CLI (terminal agent, Linux + macOS)
+
+One command installs the newest `slyy` CLI (arm64 + amd64; checksum verified, no sudo,
+to `~/.local/bin`):
+
+    curl -fsSL https://raw.githubusercontent.com/simplify-erp/slyy-releases/main/install.sh | sh
+
+Then open a new terminal and run `slyy`. Updates: `slyy update`. CLI releases are the
+`slyy-cli-v*` tags (the "Latest" badge stays with Slyy Desktop).
+
 ## Installation
 
 1. Download the DMG from the latest release and drag "Slyy Desktop.app" to
