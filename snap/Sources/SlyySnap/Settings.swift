@@ -26,6 +26,7 @@ enum Settings {
     @Pref("hadScreenAccess", false) static var hadScreenAccess: Bool
     /// Highest snap number used (slyy-NNNNN.png).
     @Pref("lastSnapNumber", 0) static var lastSnapNumber: Int
+    @Pref("cleanupAskedVersion", "") static var cleanupAskedVersion: String
     @Pref("skippedVersion", nil) static var skippedVersion: String?
 }
 

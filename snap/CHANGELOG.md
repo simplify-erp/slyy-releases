@@ -1,5 +1,13 @@
 # Slyy Shot changelog (formerly Slyy Snap)
 
+## 1.3.3
+
+- Editor crop: C, drag the area, Return crops (undo with ⌘Z).
+- Editor: Esc deselects and switches back to the Move tool.
+- After installing or updating: offers to move leftover installers (DMG/zip in
+  Downloads) to the Trash and eject the installer disk, listing them first.
+- Removed Options > "Reset Screen Recording Permission…" (handled automatically).
+
 ## 1.3.2
 
 - Editor: freehand pen tool removed.

@@ -81,27 +81,6 @@ final class Snapper {
         return false
     }
 
-    /// Remove a stale Screen Recording entry, ask again and relaunch.
-    func resetScreenRecordingPermission() {
-        let alert = NSAlert()
-        alert.messageText = "Reset Screen Recording permission?"
-        alert.informativeText = "Use this if macOS keeps asking although Slyy Shot is switched on in System Settings. "
-            + "Slyy Shot removes its entry, asks again and relaunches: then switch it on once more."
-        alert.addButton(withTitle: "Reset and Relaunch")
-        alert.addButton(withTitle: "Cancel")
-        NSApp.activate(ignoringOtherApps: true)
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        do {
-            try Updater.run("/usr/bin/tccutil", ["reset", "ScreenCapture", "ai.slyy.snap"])
-        } catch {
-            Alerts.info("Reset failed", "\(error.localizedDescription)\n\nRemove Slyy Shot with the − button under "
-                + "System Settings > Privacy & Security > Screen Recording, then reopen it.")
-            return
-        }
-        CGRequestScreenCaptureAccess()
-        relaunch(Bundle.main.bundlePath)
-    }
-
     func fileRenamed(from old: URL, to new: URL) {
         if lastSnap == old { lastSnap = new }
     }
@@ -205,4 +184,27 @@ enum Alerts {
     guard app.lastPathComponent == "Slyy Snap.app", (try? fm.moveItem(at: app, to: renamed)) != nil else { return false }
     relaunch(renamed.path)
     return true
+}
+
+/// Once per installed version: offer to trash leftover installers in ~/Downloads and eject a mounted installer DMG.
+@MainActor func offerInstallerCleanup() {
+    let version = Version.current.description, fm = FileManager.default
+    guard Settings.cleanupAskedVersion != version, !Bundle.main.bundlePath.hasPrefix("/Volumes/") else { return }
+    Settings.cleanupAskedVersion = version
+    let downloads = fm.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+    let files = ((try? fm.contentsOfDirectory(at: downloads, includingPropertiesForKeys: nil)) ?? []).filter { url in
+        ["SlyyShot-", "SlyySnap-"].contains { url.lastPathComponent.hasPrefix($0) } && ["dmg", "zip"].contains(url.pathExtension)
+    }
+    let volumes = ((try? fm.contentsOfDirectory(atPath: "/Volumes")) ?? []).filter { $0.hasPrefix("Slyy Shot ") || $0.hasPrefix("Slyy Snap ") }
+    guard !files.isEmpty || !volumes.isEmpty else { return }
+    let alert = NSAlert()
+    alert.messageText = "Clean up installation files?"
+    alert.informativeText = "Slyy Shot \(version) is installed. These are no longer needed:\n\n"
+        + (files.map { "• " + ($0.path as NSString).abbreviatingWithTildeInPath + " (to Trash)" } + volumes.map { "• /Volumes/\($0) (eject)" }).joined(separator: "\n")
+    alert.addButton(withTitle: "Clean Up")
+    alert.addButton(withTitle: "Keep")
+    NSApp.activate(ignoringOtherApps: true)
+    guard alert.runModal() == .alertFirstButtonReturn else { return }
+    for v in volumes { try? Updater.run("/usr/bin/hdiutil", ["detach", "/Volumes/" + v]) }
+    for f in files { try? fm.trashItem(at: f, resultingItemURL: nil) }
 }

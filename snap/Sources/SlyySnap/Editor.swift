@@ -112,6 +112,7 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
     var tool: Tool = .arrow {
         didSet {
             onToolChange?(tool)
+            if tool != .crop { draftCrop = nil; needsDisplay = true }
         }
     }
     private var moving: (index: Int, original: [Mark])?
@@ -149,7 +150,7 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
             let shade = NSBezierPath(rect: bounds)
             shade.appendRect(c)
             shade.windingRule = .evenOdd
-            NSColor.black.withAlphaComponent(0.55).setFill()
+            (draftCrop == nil ? NSColor(white: 0.18, alpha: 1) : NSColor.black.withAlphaComponent(0.55)).setFill()
             shade.fill()
             let border = NSBezierPath(rect: c)
             border.lineWidth = 1
@@ -343,12 +344,8 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
             return
         }
         let finishedDraft = draft
-        let finishedCrop = draftCrop
         draft = nil
-        draftCrop = nil
-        if tool == .crop, let c = finishedCrop, c.width > 4, c.height > 4 {
-            commit { crop = c.integral }
-        } else if let d = finishedDraft, d.isMeaningful {
+        if tool != .crop, let d = finishedDraft, d.isMeaningful {
             commit { marks.append(d) }
         }
         needsDisplay = true
@@ -361,11 +358,13 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
             tool = t
         } else if event.keyCode == 51 || event.keyCode == 117, selected != nil { // Delete / forward delete
             deleteSelection()
-        } else if event.keyCode == 53 { // Esc: drop the shape being drawn, deselect
-            draft = nil
+        } else if event.keyCode == 36 || event.keyCode == 76, let c = draftCrop, c.width > 4, c.height > 4 { // Return: crop
             draftCrop = nil
+            commit { crop = c.integral }
+        } else if event.keyCode == 53 { // Esc: drop drafts, deselect, back to Move
+            draft = nil
             selected = nil
-            needsDisplay = true
+            tool = .move
         } else {
             super.keyDown(with: event)
         }
