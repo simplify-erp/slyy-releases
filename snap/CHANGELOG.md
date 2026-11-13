@@ -2,6 +2,9 @@
 
 ## 1.2.1
 
+- Signed with the Slyy Snap certificate: macOS keeps the Screen Recording
+  permission across updates from now on (allow it one last time after this
+  update). Updates are only accepted if signed with the same certificate.
 - Screen Recording: if an update made macOS forget the permission (the old
   entry stays switched on but no longer applies), Slyy Snap removes the stale
   entry and asks again; switch it on once and choose "Quit & Reopen".
