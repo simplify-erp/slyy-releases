@@ -6,10 +6,11 @@ import UniformTypeIdentifiers
 // (undoable) and flattened into the PNG on save/copy.
 
 enum Tool: Int, CaseIterable {
-    case arrow, rect, ellipse, pen, highlight, text, pixelate, crop
+    case move, arrow, rect, ellipse, pen, highlight, text, pixelate, crop
 
     var title: String {
         switch self {
+        case .move: return "Move (V)"
         case .arrow: return "Arrow (A)"
         case .rect: return "Box (R)"
         case .ellipse: return "Ellipse (O)"
@@ -23,6 +24,7 @@ enum Tool: Int, CaseIterable {
 
     var symbol: String {
         switch self {
+        case .move: return "hand.point.up.left"
         case .arrow: return "arrow.up.right"
         case .rect: return "rectangle"
         case .ellipse: return "circle"
@@ -36,6 +38,7 @@ enum Tool: Int, CaseIterable {
 
     var key: String {
         switch self {
+        case .move: return "v"
         case .arrow: return "a"
         case .rect: return "r"
         case .ellipse: return "o"
@@ -63,6 +66,43 @@ struct Mark {
     var color: NSColor
     var width: CGFloat
 
+    func offsetBy(dx: CGFloat, dy: CGFloat) -> Mark {
+        func o(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x + dx, y: p.y + dy) }
+        var m = self
+        switch kind {
+        case .arrow(let a, let b): m.kind = .arrow(o(a), o(b))
+        case .rect(let r): m.kind = .rect(r.offsetBy(dx: dx, dy: dy))
+        case .ellipse(let r): m.kind = .ellipse(r.offsetBy(dx: dx, dy: dy))
+        case .pen(let pts): m.kind = .pen(pts.map(o))
+        case .highlight(let r): m.kind = .highlight(r.offsetBy(dx: dx, dy: dy))
+        case .text(let p, let s): m.kind = .text(o(p), s)
+        case .pixelate(let r): m.kind = .pixelate(r.offsetBy(dx: dx, dy: dy))
+        }
+        return m
+    }
+
+    /// Whether a click at `p` grabs this mark (generous tolerance).
+    func contains(_ p: CGPoint) -> Bool {
+        let tol = max(6, width * 1.5)
+        func nearSegment(_ a: CGPoint, _ b: CGPoint) -> Bool {
+            let dx = b.x - a.x, dy = b.y - a.y
+            let len2 = dx * dx + dy * dy
+            let t = len2 == 0 ? 0 : max(0, min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2))
+            return hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)) <= tol
+        }
+        switch kind {
+        case .arrow(let a, let b): return nearSegment(a, b)
+        case .rect(let r), .ellipse(let r), .highlight(let r), .pixelate(let r):
+            return r.insetBy(dx: -tol, dy: -tol).contains(p)
+        case .pen(let pts):
+            if pts.count == 1 { return hypot(p.x - pts[0].x, p.y - pts[0].y) <= tol }
+            return zip(pts, pts.dropFirst()).contains { nearSegment($0, $1) }
+        case .text(let at, let s):
+            let size = (s as NSString).size(withAttributes: [.font: NSFont.boldSystemFont(ofSize: EditorCanvas.fontSize(width))])
+            return CGRect(origin: at, size: size).insetBy(dx: -4, dy: -4).contains(p)
+        }
+    }
+
     var isMeaningful: Bool {
         switch kind {
         case .arrow(let a, let b): return hypot(b.x - a.x, b.y - a.y) > 4
@@ -85,7 +125,13 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
     private var draftCrop: CGRect?
     private var start = CGPoint.zero
 
-    var tool: Tool = .arrow { didSet { onToolChange?(tool) } }
+    var tool: Tool = .arrow {
+        didSet {
+            onToolChange?(tool)
+            window?.invalidateCursorRects(for: self)
+        }
+    }
+    private var moving: (index: Int, original: [Mark])?
     var color: NSColor = .systemRed
     var lineWidth: CGFloat = 4
     var onChange: (() -> Void)?
@@ -103,7 +149,7 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
 
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .crosshair) }
+    override func resetCursorRects() { addCursorRect(bounds, cursor: tool == .move ? .openHand : .crosshair) }
 
     // MARK: Drawing
 
@@ -129,7 +175,7 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
         for m in marks { draw(m, in: full) }
     }
 
-    static func fontSize(_ width: CGFloat) -> CGFloat { 12 + width * 4 }
+    nonisolated static func fontSize(_ width: CGFloat) -> CGFloat { 12 + width * 4 }
 
     private func draw(_ m: Mark, in full: NSRect) {
         m.color.setStroke()
@@ -238,6 +284,11 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
         window?.makeFirstResponder(self)
         start = point(event)
         switch tool {
+        case .move:
+            if let i = marks.indices.reversed().first(where: { marks[$0].contains(start) }) {
+                moving = (i, marks)
+                NSCursor.closedHand.set()
+            }
         case .text: addText(at: start)
         case .pen: draft = Mark(kind: .pen([start]), color: color, width: lineWidth)
         default: break
@@ -248,6 +299,10 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
         let p = point(event)
         let r = CGRect(x: min(start.x, p.x), y: min(start.y, p.y), width: abs(p.x - start.x), height: abs(p.y - start.y))
         switch tool {
+        case .move:
+            if let m = moving {
+                marks[m.index] = m.original[m.index].offsetBy(dx: p.x - start.x, dy: p.y - start.y)
+            }
         case .arrow: draft = Mark(kind: .arrow(start, p), color: color, width: lineWidth)
         case .rect: draft = Mark(kind: .rect(r), color: color, width: lineWidth)
         case .ellipse: draft = Mark(kind: .ellipse(r), color: color, width: lineWidth)
@@ -265,6 +320,19 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if let m = moving {
+            moving = nil
+            NSCursor.openHand.set()
+            if hypot(point(event).x - start.x, point(event).y - start.y) > 0.5 {
+                undoStack.append((m.original, crop))
+                changeCount += 1
+                onChange?()
+            } else {
+                marks = m.original
+            }
+            needsDisplay = true
+            return
+        }
         let finishedDraft = draft
         let finishedCrop = draftCrop
         draft = nil
