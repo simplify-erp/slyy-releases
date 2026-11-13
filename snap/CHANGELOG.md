@@ -1,5 +1,13 @@
 # Slyy Snap changelog
 
+## 1.3.0
+
+- Editor: click any arrow, box, ellipse, pen line, highlight or pixelation to
+  select it; drag to move; change its color or thickness in the toolbar;
+  Delete removes it, Esc deselects.
+- Editor: click a text to edit it in place (text, color, size); drag to move.
+- Code cleanup (no behavior change).
+
 ## 1.2.1
 
 - Signed with the Slyy Snap certificate: macOS keeps the Screen Recording
