@@ -1,5 +1,9 @@
 # Slyy Snap changelog
 
+## 1.0.1
+
+- DMG download: double-click, drag Slyy Snap to Applications.
+
 ## 1.0.0
 
 - Menu bar screenshot tool: area (⌃⇧1), window (⌃⇧2), screen (⌃⇧3).
