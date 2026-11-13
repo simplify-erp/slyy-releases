@@ -608,6 +608,7 @@ final class Editor: NSObject, NSWindowDelegate, NSPopoverDelegate {
         bar.spacing = 8
         bar.edgeInsets = NSEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
 
+        scroll.contentView = CenteringClipView()
         scroll.documentView = canvas
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = true
@@ -867,5 +868,16 @@ final class EditorWindow: NSWindow {
         let work = DispatchWorkItem { [weak self] in self?.onTitleClick?(p.rect) }
         clickWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: work)
+    }
+}
+
+/// Keeps the image centered when it is smaller than the window (e.g. the toolbar's minimum width).
+final class CenteringClipView: NSClipView {
+    override func constrainBoundsRect(_ proposed: NSRect) -> NSRect {
+        var r = super.constrainBoundsRect(proposed)
+        guard let doc = documentView?.frame else { return r }
+        if r.width > doc.width { r.origin.x = (doc.width - r.width) / 2 }
+        if r.height > doc.height { r.origin.y = (doc.height - r.height) / 2 }
+        return r
     }
 }

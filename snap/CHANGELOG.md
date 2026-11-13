@@ -1,5 +1,9 @@
 # Slyy Shot changelog (formerly Slyy Snap)
 
+## 1.3.4
+
+- Editor: small shots are centered in the window.
+
 ## 1.3.3
 
 - Editor crop: C, drag the area, Return crops (undo with ⌘Z).
