@@ -245,7 +245,6 @@ final class Updater {
         NSApp.terminate(nil)
     }
 
-    /// Remove leftovers of an interrupted update.
     func cleanUp() {
         let app = Bundle.main.bundleURL.path
         for leftover in [app + ".new", app + ".previous"] {
