@@ -10,12 +10,15 @@ enum CaptureMode {
 final class Snapper {
     private(set) var lastSnap: URL?
     private var busy = false
+    private var askedForAccess = false
 
     func capture(_ mode: CaptureMode) {
         guard !busy else { return }
-        // First run: show the system's Screen Recording prompt. Without the
-        // permission screencapture still works but shows only the desktop.
-        if !CGPreflightScreenCaptureAccess() {
+        // Show the system's Screen Recording prompt at most once per launch.
+        // Without the permission screencapture still works but shows only the
+        // desktop. (A grant takes effect after a relaunch.)
+        if !askedForAccess, !CGPreflightScreenCaptureAccess() {
+            askedForAccess = true
             CGRequestScreenCaptureAccess()
         }
         let folder = Settings.folder
@@ -59,6 +62,32 @@ final class Snapper {
 
     func copyLast() {
         if let lastSnap { Clipboard.copy(lastSnap) }
+    }
+
+    /// Remove a stale Screen Recording entry (e.g. one left by an older,
+    /// differently signed build), ask again and relaunch.
+    func resetScreenRecordingPermission() {
+        let alert = NSAlert()
+        alert.messageText = "Reset Screen Recording permission?"
+        alert.informativeText = "Use this if macOS keeps asking although Slyy Snap is switched on in System Settings. "
+            + "Slyy Snap removes its entry, asks again and relaunches: then switch it on once more."
+        alert.addButton(withTitle: "Reset and Relaunch")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            try Updater.run("/usr/bin/tccutil", ["reset", "ScreenCapture", "ai.slyy.snap"])
+        } catch {
+            Alerts.info("Reset failed", "\(error.localizedDescription)\n\nRemove Slyy Snap with the − button under "
+                + "System Settings > Privacy & Security > Screen Recording, then reopen it.")
+            return
+        }
+        CGRequestScreenCaptureAccess()
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/sh")
+        p.arguments = ["-c", "sleep 1; open \"$0\"", Bundle.main.bundlePath]
+        try? p.run()
+        NSApp.terminate(nil)
     }
 
     func editLast() {

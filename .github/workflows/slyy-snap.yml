@@ -9,10 +9,15 @@ name: Slyy Snap release
 # or run this workflow by hand with the version.
 #
 # Signing + notarization (repository secrets; without them: ad-hoc signed):
-#   SNAP_SIGN_P12           base64 of the exported .p12 (Developer ID Application
-#                           certificate + private key)
+#   SNAP_SIGN_P12           base64 of a .p12 with a code signing certificate +
+#                           private key: the self-signed "Slyy Snap Code Signing"
+#                           (stable signature, no notarization) or a Developer ID
+#                           Application certificate (also notarizable)
 #   SNAP_SIGN_P12_PASSWORD  its export password
-#   SNAP_SIGN_IDENTITY      "Developer ID Application: <Name> (<TEAMID>)"
+#   SNAP_SIGN_IDENTITY      certificate name, e.g. "Slyy Snap Code Signing" or
+#                           "Developer ID Application: <Name> (<TEAMID>)"
+# Switching certificates: set allowedDeveloperTeam in Updater.swift and release
+# that with the old certificate first, or installed copies refuse the update.
 #   NOTARY_KEY_P8           App Store Connect API key (.p8 file content, plain
 #                           or base64)
 #   NOTARY_KEY_ID           its Key ID
@@ -31,6 +36,10 @@ on:
         required: true
       dry_run:
         description: 'Build only, do not publish (artifacts kept on the run)'
+        type: boolean
+        default: false
+      test_signing:
+        description: 'Dry runs only: sign with a throwaway self-signed certificate'
         type: boolean
         default: false
 
@@ -59,9 +68,26 @@ jobs:
           echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "invalid version '$v'"; exit 1; }
           echo "VERSION=$v" >>"$GITHUB_ENV"
 
-      - name: Signing certificate (optional)
-        if: env.SNAP_SIGN_P12 != ''
+      - name: Throwaway signing certificate (test)
+        if: inputs.dry_run && inputs.test_signing
         run: |
+          cd "$RUNNER_TEMP"
+          printf '[req]\ndistinguished_name=dn\nx509_extensions=ext\nprompt=no\n[dn]\nCN=Slyy Snap Test Signing\n[ext]\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=critical,codeSigning\n' >t.cnf
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout t.key -out t.pem -days 2 -config t.cnf
+          openssl pkcs12 -export -legacy -inkey t.key -in t.pem -name "Slyy Snap Test Signing" -passout pass:test -out t.p12 ||
+            openssl pkcs12 -export -inkey t.key -in t.pem -name "Slyy Snap Test Signing" -passout pass:test -out t.p12
+          {
+            echo "TEST_SIGN_P12=$(base64 -i t.p12 | tr -d '\n')"
+            echo "TEST_SIGN_P12_PASSWORD=test"
+            echo "TEST_SIGN_IDENTITY=Slyy Snap Test Signing"
+          } >>"$GITHUB_ENV"
+
+      - name: Signing certificate (optional)
+        if: env.SNAP_SIGN_P12 != '' || env.TEST_SIGN_P12 != ''
+        run: |
+          if [ -z "$SNAP_SIGN_P12" ]; then
+            SNAP_SIGN_P12="$TEST_SIGN_P12"; SNAP_SIGN_P12_PASSWORD="$TEST_SIGN_P12_PASSWORD"; SNAP_SIGN_IDENTITY="$TEST_SIGN_IDENTITY"
+          fi
           [ -n "$SNAP_SIGN_IDENTITY" ] || { echo "SNAP_SIGN_IDENTITY secret missing"; exit 1; }
           kc="$RUNNER_TEMP/snap.keychain-db"; pw="$(uuidgen)"
           security create-keychain -p "$pw" "$kc"
@@ -77,7 +103,7 @@ jobs:
           done
           security set-key-partition-list -S apple-tool:,apple: -s -k "$pw" "$kc"
           security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
-          security find-identity -v -p codesigning "$kc"
+          security find-identity -p codesigning "$kc"
           echo "SIGN_IDENTITY=$SNAP_SIGN_IDENTITY" >>"$GITHUB_ENV"
 
       - name: Notary key (optional)

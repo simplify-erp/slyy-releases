@@ -6,6 +6,10 @@ import Security
 // assets SlyySnap-X.Y.Z.zip + SHA256SUMS (see snap/scripts/build.sh).
 private let releasesAPI = URL(string: "https://api.github.com/repos/simplify-erp/slyy-releases/releases?per_page=100")!
 private let tagPrefix = "slyy-snap-v"
+/// Apple Developer ID team whose signature updates may also carry (set this
+/// before switching the release builds from the self-signed certificate to a
+/// Developer ID, so installed copies accept the switch). Empty: none.
+private let allowedDeveloperTeam = ""
 let installCommand = "curl -fsSL https://raw.githubusercontent.com/simplify-erp/slyy-releases/main/snap-install.sh | sh"
 
 struct Version: Comparable, CustomStringConvertible {
@@ -164,41 +168,46 @@ final class Updater {
             throw UpdateError("The download is not Slyy Snap \(version); nothing installed.")
         }
         try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app.path])
-        // Signed by a Developer ID team: accept only updates from that same team.
-        if let team = currentTeamID() {
-            try verifySignature(of: app, team: team)
+        // Signed with a stable certificate (self-signed or Developer ID): accept
+        // only updates that satisfy this app's designated requirement.
+        if let requirement = updateRequirement() {
+            try verifySignature(of: app, requirement: requirement)
         }
         return app
     }
 
-    /// Team ID of the running app's signature; nil when ad-hoc signed.
-    nonisolated static func currentTeamID() -> String? {
+    /// The running app's designated requirement (plus the allowed Developer ID
+    /// team, if set); nil when ad-hoc signed (that requirement is the build's
+    /// own hash and changes with every build).
+    nonisolated static func updateRequirement() -> String? {
         var code: SecCode?
         guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
         var staticCode: SecStaticCode?
         guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return nil }
-        var info: CFDictionary?
-        guard SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
-              let dict = info as? [String: Any],
-              let team = dict[kSecCodeInfoTeamIdentifier as String] as? String, !team.isEmpty else { return nil }
-        return team
+        var requirement: SecRequirement?
+        guard SecCodeCopyDesignatedRequirement(staticCode, [], &requirement) == errSecSuccess,
+              let requirement else { return nil }
+        var text: CFString?
+        guard SecRequirementCopyString(requirement, [], &text) == errSecSuccess, let text else { return nil }
+        let own = text as String
+        if own.hasPrefix("cdhash") { return nil }
+        if allowedDeveloperTeam.isEmpty { return own }
+        return "(\(own)) or (identifier \"ai.slyy.snap\" and anchor apple generic and certificate leaf[subject.OU] = \"\(allowedDeveloperTeam)\")"
     }
 
-    /// Valid Apple-anchored (Developer ID) signature from `team`, all architectures, nested code included.
-    nonisolated static func verifySignature(of app: URL, team: String) throws {
+    nonisolated static func verifySignature(of app: URL, requirement text: String) throws {
         var code: SecStaticCode?
         guard SecStaticCodeCreateWithPath(app as CFURL, [], &code) == errSecSuccess, let code else {
             throw UpdateError("Cannot read the signature of the download; nothing installed.")
         }
         var requirement: SecRequirement?
-        let text = "anchor apple generic and certificate leaf[subject.OU] = \"\(team)\""
         guard SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess, let requirement else {
             throw UpdateError("Internal error: bad signature requirement.")
         }
         let flags = SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSStrictValidate | kSecCSCheckNestedCode)
         let status = SecStaticCodeCheckValidity(code, flags, requirement)
         guard status == errSecSuccess else {
-            throw UpdateError("The download is not signed by team \(team) (error \(status)); nothing installed.")
+            throw UpdateError("The download is not signed like this app (error \(status)); nothing installed.")
         }
     }
 

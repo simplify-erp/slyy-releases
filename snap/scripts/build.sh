@@ -35,18 +35,17 @@ plutil -lint "$app/Contents/Info.plist"
 
 
 identity="${SIGN_IDENTITY:--}"
-if [ "$identity" = - ]; then
-	ts=--timestamp=none # ad-hoc: no timestamp server
-else
-	ts=--timestamp # Developer ID: secure timestamp (required for notarization)
-fi
+case "$identity" in
+"Developer ID"*) ts=--timestamp ;; # secure timestamp (required for notarization)
+*) ts=--timestamp=none ;;          # ad-hoc or self-signed
+esac
 codesign --force --options runtime "$ts" --sign "$identity" "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 
 # Notarization (needs a Developer ID signature and an App Store Connect API
 # key: NOTARY_KEY = path to the .p8, NOTARY_KEY_ID, NOTARY_ISSUER).
 notarize=no
-if [ "$identity" != - ] && [ -n "${NOTARY_KEY:-}" ] && [ -n "${NOTARY_KEY_ID:-}" ] && [ -n "${NOTARY_ISSUER:-}" ]; then
+if [ "$ts" = --timestamp ] && [ -n "${NOTARY_KEY:-}" ] && [ -n "${NOTARY_KEY_ID:-}" ] && [ -n "${NOTARY_ISSUER:-}" ]; then
 	notarize=yes
 fi
 submit() {

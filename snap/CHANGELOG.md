@@ -1,5 +1,13 @@
 # Slyy Snap changelog
 
+## 1.2.0
+
+- Signed with a stable Slyy Snap certificate: macOS keeps the Screen Recording
+  permission across updates (allow it one last time after this update).
+- Updates are only accepted if signed with the same certificate.
+- Screen Recording prompt at most once per launch; new Options >
+  "Reset Screen Recording Permission…" for a stuck entry.
+
 ## 1.1.1
 
 - Slyy logo as app icon; menu bar icon: Slyy dot in a viewfinder.
