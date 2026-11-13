@@ -94,7 +94,8 @@ Slyy Shot $ver
 1. Drag "Slyy Shot" onto "Applications".
 $open_step
 3. A camera icon appears in the menu bar:
-   Ctrl+Shift+1 area, Ctrl+Shift+2 window, Ctrl+Shift+3 screen.
+   Cmd+Shift+5 area, Cmd+Shift+4 window, Cmd+Shift+3 screen
+   (switch off the macOS "Screenshots" keyboard shortcuts first).
 4. First capture: allow Slyy Shot under Privacy & Security > Screen
    Recording, then quit and reopen it.
 

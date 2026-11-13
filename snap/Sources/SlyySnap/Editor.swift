@@ -134,8 +134,6 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    // MARK: Drawing
-
     override func draw(_ dirtyRect: NSRect) {
         var visible = marks
         if let i = editingIndex, visible.indices.contains(i) { visible.remove(at: i) }

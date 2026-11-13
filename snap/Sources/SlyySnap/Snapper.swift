@@ -66,17 +66,11 @@ final class Snapper {
             CGRequestScreenCaptureAccess() // system prompt (adds a fresh entry)
             return false
         }
-        let alert = NSAlert()
-        alert.messageText = "Slyy Shot needs Screen Recording permission"
-        alert.informativeText = "Switch on Slyy Shot under System Settings > Privacy & Security > Screen Recording, "
-            + "then choose \"Quit & Reopen\".\n\nAfter an update, an older Slyy Shot entry may still be listed and "
-            + "switched on: remove it with the − button, then add or switch on the current one."
-        alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Cancel")
-        NSApp.activate(ignoringOtherApps: true)
-        if alert.runModal() == .alertFirstButtonReturn,
-           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-            NSWorkspace.shared.open(url)
+        if Alerts.confirm("Slyy Shot needs Screen Recording permission",
+                          "Switch on Slyy Shot under System Settings > Privacy & Security > Screen Recording, then choose "
+                          + "\"Quit & Reopen\".\n\nAfter an update, an older Slyy Shot entry may still be listed and switched on: "
+                          + "remove it with the − button, then add or switch on the current one.", "Open System Settings", cancel: "Cancel") {
+            Alerts.openSettings("com.apple.preference.security?Privacy_ScreenCapture")
         }
         return false
     }
@@ -156,12 +150,21 @@ enum Clipboard {
 
 @MainActor
 enum Alerts {
-    static func info(_ title: String, _ text: String) {
+    static func info(_ title: String, _ text: String) { _ = confirm(title, text, "OK") }
+
+    /// Alert with an action button (and a cancel button when `cancel` is set); true if the action was chosen.
+    static func confirm(_ title: String, _ text: String, _ action: String, cancel: String? = nil) -> Bool {
         let a = NSAlert()
         a.messageText = title
         a.informativeText = text
+        a.addButton(withTitle: action)
+        if let cancel { a.addButton(withTitle: cancel) }
         NSApp.activate(ignoringOtherApps: true)
-        a.runModal()
+        return a.runModal() == .alertFirstButtonReturn
+    }
+
+    static func openSettings(_ pane: String) {
+        if let url = URL(string: "x-apple.systempreferences:" + pane) { NSWorkspace.shared.open(url) }
     }
 }
 
@@ -197,14 +200,18 @@ enum Alerts {
     }
     let volumes = ((try? fm.contentsOfDirectory(atPath: "/Volumes")) ?? []).filter { $0.hasPrefix("Slyy Shot ") || $0.hasPrefix("Slyy Snap ") }
     guard !files.isEmpty || !volumes.isEmpty else { return }
-    let alert = NSAlert()
-    alert.messageText = "Clean up installation files?"
-    alert.informativeText = "Slyy Shot \(version) is installed. These are no longer needed:\n\n"
-        + (files.map { "• " + ($0.path as NSString).abbreviatingWithTildeInPath + " (to Trash)" } + volumes.map { "• /Volumes/\($0) (eject)" }).joined(separator: "\n")
-    alert.addButton(withTitle: "Clean Up")
-    alert.addButton(withTitle: "Keep")
-    NSApp.activate(ignoringOtherApps: true)
-    guard alert.runModal() == .alertFirstButtonReturn else { return }
+    let list = files.map { "• " + ($0.path as NSString).abbreviatingWithTildeInPath + " (to Trash)" } + volumes.map { "• /Volumes/\($0) (eject)" }
+    guard Alerts.confirm("Clean up installation files?", "Slyy Shot \(version) is installed. These are no longer needed:\n\n"
+                         + list.joined(separator: "\n"), "Clean Up", cancel: "Keep") else { return }
     for v in volumes { try? Updater.run("/usr/bin/hdiutil", ["detach", "/Volumes/" + v]) }
     for f in files { try? fm.trashItem(at: f, resultingItemURL: nil) }
+}
+
+/// Once: macOS keeps ⌘⇧3/4/5 for its own screenshot tool unless switched off; show where.
+@MainActor func offerToFreeSystemShortcuts() {
+    guard !Settings.shortcutsHintShown else { return }
+    Settings.shortcutsHintShown = true
+    if Alerts.confirm("Use ⌘⇧3 / ⌘⇧4 / ⌘⇧5 for Slyy Shot", "Slyy Shot captures the screen (⌘⇧3), a window (⌘⇧4) and an area (⌘⇧5). "
+                      + "macOS uses these keys for its own screenshot tool: switch off \"Screenshots\" under Keyboard Shortcuts.",
+                      "Open Keyboard Shortcuts", cancel: "Later") { Alerts.openSettings("com.apple.Keyboard-Settings.extension") }
 }

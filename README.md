@@ -40,7 +40,8 @@ Deutsch: siehe LIESMICH.txt im DMG.
 
 ## Slyy Shot (personal screenshot tool, macOS 13+)
 
-Menu bar app: ⌃⇧1 area, ⌃⇧2 window, ⌃⇧3 screen. Saves PNGs to
+Menu bar app: ⌘⇧5 area, ⌘⇧4 window, ⌘⇧3 screen (switch off the
+macOS "Screenshots" keyboard shortcuts). Saves PNGs to
 ~/Pictures/Slyy Shot and copies them to the clipboard. Install: download
 https://github.com/simplify-erp/slyy-releases/releases/download/slyy-shot-latest/SlyyShot.dmg
 (always the newest), open it, drag Slyy Shot to Applications (first launch: Privacy & Security > "Open Anyway").
