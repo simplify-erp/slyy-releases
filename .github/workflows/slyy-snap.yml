@@ -1,30 +1,15 @@
 name: Slyy Shot release
 
-# Builds snap/ on macOS and publishes release slyy-snap-v<version> with
-# SlyyShot-<version>.dmg + .zip + SHA256SUMS. Never takes the "Latest" badge
-# (that stays with Slyy Desktop).
-#
-# Release: bump snap/CHANGELOG.md, then either push a tag
-#   git tag slyy-snap-v1.0.1 && git push origin slyy-snap-v1.0.1
-# or run this workflow by hand with the version.
-#
-# Signing + notarization (repository secrets; without them: ad-hoc signed):
-#   SNAP_SIGN_P12           base64 of a .p12 with a code signing certificate +
-#                           private key: the self-signed "Slyy Shot Code Signing"
-#                           (stable signature, no notarization) or a Developer ID
-#                           Application certificate (also notarizable)
-#   SNAP_SIGN_P12_PASSWORD  its export password
-#   SNAP_SIGN_IDENTITY      certificate name, e.g. "Slyy Shot Code Signing" or
-#                           "Developer ID Application: <Name> (<TEAMID>)"
-# Switching certificates: set allowedDeveloperTeam in Updater.swift and release
-# that with the old certificate first, or installed copies refuse the update.
-#   NOTARY_KEY_P8           App Store Connect API key (.p8 file content, plain
-#                           or base64)
-#   NOTARY_KEY_ID           its Key ID
-#   NOTARY_ISSUER_ID        its Issuer ID
-# Signed + notarized builds open without Gatekeeper warnings, keep the Screen
-# Recording permission across updates, and the app then only accepts updates
-# signed by the same team.
+# Builds snap/ on macOS, publishes slyy-snap-v<version> (SlyyShot-<version>.dmg + .zip + SHA256SUMS; never
+# "Latest", that stays with Slyy Desktop) and refreshes the slyy-shot-latest download link.
+# Release: bump snap/CHANGELOG.md, then push tag slyy-snap-v<version> or run this workflow with the version.
+# Secrets (without them: ad-hoc signed):
+#   SNAP_SIGN_P12 / _PASSWORD  base64 .p12 + password: self-signed "Slyy Snap Code Signing" (stable signature)
+#                              or a Developer ID Application certificate (also notarizable)
+#   SNAP_SIGN_IDENTITY         certificate name (the fingerprint is looked up from the .p12)
+#   NOTARY_KEY_P8 / NOTARY_KEY_ID / NOTARY_ISSUER_ID  App Store Connect API key (.p8 plain or base64)
+# Switching certificates: set allowedDeveloperTeam in Updater.swift and release that with the old
+# certificate first, or installed copies refuse the update.
 
 on:
   push:
@@ -45,6 +30,7 @@ on:
 
 permissions:
   contents: write
+  actions: write # starts the "Slyy Shot latest link" workflow
 
 concurrency: slyy-snap-release
 
@@ -160,3 +146,4 @@ jobs:
             --notes-file "$RUNNER_TEMP/notes.md" \
             --target "$GITHUB_SHA" \
             --latest=false
+          gh workflow run slyy-shot-latest.yml -f version="$VERSION"

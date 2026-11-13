@@ -42,8 +42,8 @@ Deutsch: siehe LIESMICH.txt im DMG.
 
 Menu bar app: ⌃⇧1 area, ⌃⇧2 window, ⌃⇧3 screen. Saves PNGs to
 ~/Pictures/Slyy Shot and copies them to the clipboard. Install: download
-`SlyyShot-<version>.dmg` from the newest `slyy-snap-v*` release, open it, drag
-Slyy Shot to Applications (first launch: Privacy & Security > "Open Anyway").
+https://github.com/simplify-erp/slyy-releases/releases/download/slyy-shot-latest/SlyyShot.dmg
+(always the newest), open it, drag Slyy Shot to Applications (first launch: Privacy & Security > "Open Anyway").
 Or from Terminal (no Gatekeeper prompt):
 
     curl -fsSL https://raw.githubusercontent.com/simplify-erp/slyy-releases/main/snap-install.sh | sh
