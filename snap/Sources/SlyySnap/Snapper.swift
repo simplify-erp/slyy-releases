@@ -14,13 +14,7 @@ final class Snapper {
 
     func capture(_ mode: CaptureMode) {
         guard !busy else { return }
-        // Show the system's Screen Recording prompt at most once per launch.
-        // Without the permission screencapture still works but shows only the
-        // desktop. (A grant takes effect after a relaunch.)
-        if !askedForAccess, !CGPreflightScreenCaptureAccess() {
-            askedForAccess = true
-            CGRequestScreenCaptureAccess()
-        }
+        guard ensureScreenRecordingAccess() else { return }
         let folder = Settings.folder
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -63,6 +57,41 @@ final class Snapper {
 
     func copyLast() {
         if let lastSnap { Clipboard.copy(lastSnap) }
+    }
+
+    /// Screen Recording permission. Without it screencapture only records the
+    /// desktop wallpaper, so we do not capture at all. If the app had the
+    /// permission before and lost it, an update replaced it with a build macOS
+    /// does not recognise (unsigned builds): the old entry in System Settings
+    /// stays switched on but no longer applies. Remove it, so the system prompt
+    /// adds a fresh one, and explain.
+    private func ensureScreenRecordingAccess() -> Bool {
+        if CGPreflightScreenCaptureAccess() {
+            Settings.hadScreenAccess = true
+            return true
+        }
+        if !askedForAccess {
+            askedForAccess = true
+            if Settings.hadScreenAccess {
+                try? Updater.run("/usr/bin/tccutil", ["reset", "ScreenCapture", "ai.slyy.snap"])
+                Settings.hadScreenAccess = false
+            }
+            CGRequestScreenCaptureAccess() // system prompt (adds a fresh entry)
+            return false
+        }
+        let alert = NSAlert()
+        alert.messageText = "Slyy Snap needs Screen Recording permission"
+        alert.informativeText = "Switch on Slyy Snap under System Settings > Privacy & Security > Screen Recording, "
+            + "then choose \"Quit & Reopen\".\n\nAfter an update, an older Slyy Snap entry may still be listed and "
+            + "switched on: remove it with the − button, then add or switch on the current one."
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        if alert.runModal() == .alertFirstButtonReturn,
+           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        }
+        return false
     }
 
     /// Remove a stale Screen Recording entry (e.g. one left by an older,
