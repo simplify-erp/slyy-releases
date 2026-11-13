@@ -5,9 +5,9 @@
 	<key>CFBundleIdentifier</key>
 	<string>ai.slyy.snap</string>
 	<key>CFBundleName</key>
-	<string>Slyy Snap</string>
+	<string>Slyy Shot</string>
 	<key>CFBundleDisplayName</key>
-	<string>Slyy Snap</string>
+	<string>Slyy Shot</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleExecutable</key>
@@ -27,6 +27,6 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>Slyy Snap -- personal screenshot tool</string>
+	<string>Slyy Shot -- personal screenshot tool</string>
 </dict>
 </plist>

@@ -1,6 +1,6 @@
 #!/bin/sh
-# Build "Slyy Snap.app" (universal arm64 + x86_64) and the release assets:
-#   snap/dist/SlyySnap-<version>.dmg  (double-click install: drag to Applications)
+# Build "Slyy Shot.app" (universal arm64 + x86_64) and the release assets:
+#   snap/dist/SlyyShot-<version>.dmg  (double-click install: drag to Applications)
 #   snap/dist/SlyySnap-<version>.zip  (used by the self-updater and snap-install.sh)
 #   snap/dist/SHA256SUMS
 # Usage: snap/scripts/build.sh 1.0.0      (macOS + Xcode command line tools)
@@ -16,7 +16,7 @@ swift build -c release --arch arm64 --arch x86_64
 bin="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/SlyySnap"
 
 rm -rf dist
-app="dist/Slyy Snap.app"
+app="dist/Slyy Shot.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/SlyySnap"
 sed "s/__VERSION__/$ver/g" Resources/Info.plist >"$app/Contents/Info.plist"
@@ -71,35 +71,36 @@ if [ "$notarize" = yes ]; then
 fi
 
 zip="SlyySnap-$ver.zip"
-dmg="SlyySnap-$ver.dmg"
-(cd dist && ditto -c -k --keepParent "Slyy Snap.app" "$zip")
+dmg="SlyyShot-$ver.dmg"
+# The zip keeps the pre-1.3 bundle name "Slyy Snap.app" (1.2.x updaters look for it); the app renames itself.
+(cd dist && ditto "Slyy Shot.app" "z/Slyy Snap.app" && ditto -c -k --keepParent "z/Slyy Snap.app" "$zip" && rm -rf z)
 
 if [ "$notarize" = yes ]; then
 	open_step="2. Open it from Applications."
 else
 	open_step="2. Open it from Applications. The first time, macOS says the developer
    cannot be verified: open System Settings > Privacy & Security, click
-   \"Open Anyway\", then open Slyy Snap again."
+   \"Open Anyway\", then open Slyy Shot again."
 fi
 
 # DMG: the app, an Applications shortcut and a short read-me.
 stage=dist/dmg
 mkdir -p "$stage"
-ditto "$app" "$stage/Slyy Snap.app"
+ditto "$app" "$stage/Slyy Shot.app"
 ln -s /Applications "$stage/Applications"
 cat >"$stage/Read Me.txt" <<TXT
-Slyy Snap $ver
+Slyy Shot $ver
 
-1. Drag "Slyy Snap" onto "Applications".
+1. Drag "Slyy Shot" onto "Applications".
 $open_step
 3. A camera icon appears in the menu bar:
    Ctrl+Shift+1 area, Ctrl+Shift+2 window, Ctrl+Shift+3 screen.
-4. First capture: allow Slyy Snap under Privacy & Security > Screen
+4. First capture: allow Slyy Shot under Privacy & Security > Screen
    Recording, then quit and reopen it.
 
 Updates: menu > Check for Updates... (also automatic).
 TXT
-hdiutil create -volname "Slyy Snap $ver" -srcfolder "$stage" -fs HFS+ -format UDZO -ov "dist/$dmg"
+hdiutil create -volname "Slyy Shot $ver" -srcfolder "$stage" -fs HFS+ -format UDZO -ov "dist/$dmg"
 rm -rf "$stage"
 codesign --force "$ts" --sign "$identity" "dist/$dmg"
 if [ "$notarize" = yes ]; then

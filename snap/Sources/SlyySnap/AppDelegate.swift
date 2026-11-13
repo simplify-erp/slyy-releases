@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         updater.cleanUp()
+        if migrateFromSlyySnap() { return }
         if CGPreflightScreenCaptureAccess() { Settings.hadScreenAccess = true }
         NSApp.mainMenu = Self.mainMenu()
         let snapperForRename = snapper
@@ -19,7 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
             button.image = Self.menuBarIcon()
-            button.toolTip = "Slyy Snap"
+            button.toolTip = "Slyy Shot"
         }
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -67,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = "Slyy Snap"
+        image.accessibilityDescription = "Slyy Shot"
         return image
     }
 
@@ -80,8 +81,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return i
         }
         let main = NSMenu()
-        let appMenu = NSMenu(title: "Slyy Snap")
-        appMenu.addItem(item("Quit Slyy Snap", #selector(NSApplication.terminate(_:)), "q"))
+        let appMenu = NSMenu(title: "Slyy Shot")
+        appMenu.addItem(item("Quit Slyy Shot", #selector(NSApplication.terminate(_:)), "q"))
         let fileMenu = NSMenu(title: "File")
         fileMenu.addItem(item("Save", #selector(Editor.saveDocument(_:)), "s"))
         fileMenu.addItem(item("Save As…", #selector(Editor.saveDocumentAs(_:)), "s", [.command, .shift]))
@@ -153,8 +154,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         options.addItem(ActionItem("Reset Screen Recording Permission…") { snapper.resetScreenRecordingPermission() })
         menu.addItem(ActionItem("Check for Updates…") { updater.check(userInitiated: true) })
         menu.addItem(.separator())
-        menu.addItem(ActionItem("Slyy Snap \(Version.current)", enabled: false) {})
-        menu.addItem(ActionItem("Quit Slyy Snap", key: "q", mods: .command) { NSApp.terminate(nil) })
+        menu.addItem(ActionItem("Slyy Shot \(Version.current)", enabled: false) {})
+        menu.addItem(ActionItem("Quit Slyy Shot", key: "q", mods: .command) { NSApp.terminate(nil) })
     }
 }
 

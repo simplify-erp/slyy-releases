@@ -4,7 +4,7 @@ import Foundation
 enum Settings {
     private static var d: UserDefaults { .standard }
 
-    /// Where snaps are saved. Default: ~/Pictures/Slyy Snap
+    /// Where snaps are saved. Default: ~/Pictures/Slyy Shot
     static var folder: URL {
         get {
             if let p = d.string(forKey: "folder"), !p.isEmpty {
@@ -12,7 +12,7 @@ enum Settings {
             }
             let pictures = FileManager.default.urls(for: .picturesDirectory, in: .userDomainMask).first
                 ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Pictures")
-            return pictures.appendingPathComponent("Slyy Snap", isDirectory: true)
+            return pictures.appendingPathComponent("Slyy Shot", isDirectory: true)
         }
         set { d.set(newValue.path, forKey: "folder") }
     }

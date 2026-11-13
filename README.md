@@ -38,12 +38,12 @@ Then open a new terminal and run `slyy`. Updates: `slyy update`. Remove: `slyy u
 
 Deutsch: siehe LIESMICH.txt im DMG.
 
-## Slyy Snap (personal screenshot tool, macOS 13+)
+## Slyy Shot (personal screenshot tool, macOS 13+)
 
 Menu bar app: ⌃⇧1 area, ⌃⇧2 window, ⌃⇧3 screen. Saves PNGs to
-~/Pictures/Slyy Snap and copies them to the clipboard. Install: download
-`SlyySnap-<version>.dmg` from the newest `slyy-snap-v*` release, open it, drag
-Slyy Snap to Applications (first launch: Privacy & Security > "Open Anyway").
+~/Pictures/Slyy Shot and copies them to the clipboard. Install: download
+`SlyyShot-<version>.dmg` from the newest `slyy-snap-v*` release, open it, drag
+Slyy Shot to Applications (first launch: Privacy & Security > "Open Anyway").
 Or from Terminal (no Gatekeeper prompt):
 
     curl -fsSL https://raw.githubusercontent.com/simplify-erp/slyy-releases/main/snap-install.sh | sh
