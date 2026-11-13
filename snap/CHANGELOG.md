@@ -1,5 +1,9 @@
 # Slyy Shot changelog (formerly Slyy Snap)
 
+## 1.3.2
+
+- Editor: freehand pen tool removed.
+
 ## 1.3.1
 
 - Editor: open-hand cursor when hovering over a movable item.

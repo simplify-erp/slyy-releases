@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 // (undoable) and flattened into the PNG on save/copy.
 
 enum Tool: Int, CaseIterable {
-    case move, arrow, rect, ellipse, pen, highlight, text, pixelate, crop
+    case move, arrow, rect, ellipse, highlight, text, pixelate, crop
 
     private var info: (title: String, symbol: String, key: String) {
         switch self {
@@ -14,7 +14,6 @@ enum Tool: Int, CaseIterable {
         case .arrow: return ("Arrow (A)", "arrow.up.right", "a")
         case .rect: return ("Box (R)", "rectangle", "r")
         case .ellipse: return ("Ellipse (O)", "circle", "o")
-        case .pen: return ("Pen (P)", "scribble", "p")
         case .highlight: return ("Highlight (H)", "highlighter", "h")
         case .text: return ("Text (T)", "textformat", "t")
         case .pixelate: return ("Pixelate (X)", "square.grid.3x3.fill", "x")
@@ -32,7 +31,6 @@ struct Mark {
         case arrow(CGPoint, CGPoint)
         case rect(CGRect)
         case ellipse(CGRect)
-        case pen([CGPoint])
         case highlight(CGRect)
         case text(CGPoint, String)
         case pixelate(CGRect)
@@ -49,7 +47,6 @@ struct Mark {
         case .arrow(let a, let b): m.kind = .arrow(o(a), o(b))
         case .rect(let r): m.kind = .rect(r.offsetBy(dx: dx, dy: dy))
         case .ellipse(let r): m.kind = .ellipse(r.offsetBy(dx: dx, dy: dy))
-        case .pen(let pts): m.kind = .pen(pts.map(o))
         case .highlight(let r): m.kind = .highlight(r.offsetBy(dx: dx, dy: dy))
         case .text(let p, let s): m.kind = .text(o(p), s)
         case .pixelate(let r): m.kind = .pixelate(r.offsetBy(dx: dx, dy: dy))
@@ -76,9 +73,6 @@ struct Mark {
             return abs(d - 1) * min(rx, ry) <= tol
         case .highlight(let r), .pixelate(let r):
             return r.insetBy(dx: -tol, dy: -tol).contains(p)
-        case .pen(let pts):
-            if pts.count == 1 { return hypot(p.x - pts[0].x, p.y - pts[0].y) <= tol }
-            return zip(pts, pts.dropFirst()).contains { nearSegment($0, $1) }
         case .text:
             return bounds.insetBy(dx: -4, dy: -4).contains(p)
         }
@@ -88,10 +82,6 @@ struct Mark {
         switch kind {
         case .arrow(let a, let b): return CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
         case .rect(let r), .ellipse(let r), .highlight(let r), .pixelate(let r): return r
-        case .pen(let pts):
-            let xs = pts.map(\.x), ys = pts.map(\.y)
-            guard let x0 = xs.min(), let x1 = xs.max(), let y0 = ys.min(), let y1 = ys.max() else { return .zero }
-            return CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
         case .text(let at, let s):
             let size = (s as NSString).size(withAttributes: [.font: NSFont.boldSystemFont(ofSize: EditorCanvas.fontSize(width))])
             return CGRect(origin: at, size: size)
@@ -102,7 +92,6 @@ struct Mark {
         switch kind {
         case .arrow(let a, let b): return hypot(b.x - a.x, b.y - a.y) > 4
         case .rect(let r), .ellipse(let r), .highlight(let r), .pixelate(let r): return r.width > 3 && r.height > 3
-        case .pen(let pts): return pts.count > 1
         case .text(_, let s): return !s.isEmpty
         }
     }
@@ -202,15 +191,6 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
             let p: NSBezierPath
             if case .rect = m.kind { p = NSBezierPath(roundedRect: r, xRadius: 3, yRadius: 3) } else { p = NSBezierPath(ovalIn: r) }
             p.lineWidth = m.width
-            p.stroke()
-        case .pen(let pts):
-            guard let first = pts.first else { return }
-            let p = NSBezierPath()
-            p.lineWidth = m.width
-            p.lineCapStyle = .round
-            p.lineJoinStyle = .round
-            p.move(to: first)
-            for pt in pts.dropFirst() { p.line(to: pt) }
             p.stroke()
         case .highlight(let r):
             m.color.withAlphaComponent(0.35).setFill()
@@ -326,11 +306,7 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
             return
         }
         selected = nil
-        switch tool {
-        case .text: openTextField(text: "", at: CGPoint(x: start.x - 3, y: start.y - Self.fieldHeight(lineWidth) / 2))
-        case .pen: draft = Mark(kind: .pen([start]), color: color, width: lineWidth)
-        default: break
-        }
+        if tool == .text { openTextField(text: "", at: CGPoint(x: start.x - 3, y: start.y - Self.fieldHeight(lineWidth) / 2)) }
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -347,11 +323,6 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
         case .ellipse: draft = Mark(kind: .ellipse(r), color: color, width: lineWidth)
         case .highlight: draft = Mark(kind: .highlight(r), color: color, width: lineWidth)
         case .pixelate: draft = Mark(kind: .pixelate(r), color: color, width: lineWidth)
-        case .pen:
-            if case .pen(var pts)? = draft?.kind {
-                pts.append(p)
-                draft?.kind = .pen(pts)
-            }
         case .crop: draftCrop = r
         case .move, .text: break
         }
