@@ -16,8 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "Slyy Snap")
-            button.image?.isTemplate = true
+            button.image = Self.menuBarIcon()
+            button.toolTip = "Slyy Snap"
         }
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -41,6 +41,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if Settings.autoUpdate { self?.updater.check(userInitiated: false) }
             }
         }
+    }
+
+    /// Slyy dot inside viewfinder corners; template image, so macOS tints it
+    /// for light/dark menu bars.
+    private static func menuBarIcon() -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+            NSColor.black.set()
+            let inset = rect.insetBy(dx: 1.5, dy: 1.5)
+            let arm: CGFloat = 4.5
+            let corners = NSBezierPath()
+            corners.lineWidth = 1.6
+            corners.lineCapStyle = .round
+            corners.lineJoinStyle = .round
+            for (x, y, dx, dy) in [(inset.minX, inset.minY, arm, arm), (inset.maxX, inset.minY, -arm, arm),
+                                   (inset.minX, inset.maxY, arm, -arm), (inset.maxX, inset.maxY, -arm, -arm)] {
+                corners.move(to: NSPoint(x: x, y: y + dy))
+                corners.line(to: NSPoint(x: x, y: y))
+                corners.line(to: NSPoint(x: x + dx, y: y))
+            }
+            corners.stroke()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 5, dy: 5)).fill()
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Slyy Snap"
+        return image
     }
 
     /// Hidden for a menu bar app, but gives editor windows and text fields

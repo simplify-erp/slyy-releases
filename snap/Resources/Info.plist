@@ -8,6 +8,8 @@
 	<string>Slyy Snap</string>
 	<key>CFBundleDisplayName</key>
 	<string>Slyy Snap</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleExecutable</key>
 	<string>SlyySnap</string>
 	<key>CFBundlePackageType</key>

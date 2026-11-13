@@ -1,5 +1,9 @@
 # Slyy Snap changelog
 
+## 1.1.1
+
+- Slyy logo as app icon; menu bar icon: Slyy dot in a viewfinder.
+
 ## 1.1.0
 
 - Editor: opens after each capture (switch off under Options) or via
