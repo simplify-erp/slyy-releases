@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Settings.registerDefaults()
         updater.cleanUp()
+        NSApp.mainMenu = Self.mainMenu()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
@@ -23,12 +24,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         statusItem.menu = menu
 
-        // ⌃⇧1 area, ⌃⇧2 window, ⌃⇧3 screen (⌘⇧3/4/5 stay with macOS).
+        // ⌃⇧1 area, ⌃⇧2 window, ⌃⇧3 screen, ⌃⇧E edit last (⌘⇧3/4/5 stay with macOS).
         let mods = controlKey | shiftKey
         let snapper = self.snapper
         HotKeys.shared.register(id: 1, keyCode: kVK_ANSI_1, modifiers: mods) { snapper.capture(.area) }
         HotKeys.shared.register(id: 2, keyCode: kVK_ANSI_2, modifiers: mods) { snapper.capture(.window) }
         HotKeys.shared.register(id: 3, keyCode: kVK_ANSI_3, modifiers: mods) { snapper.capture(.screen) }
+        HotKeys.shared.register(id: 4, keyCode: kVK_ANSI_E, modifiers: mods) { snapper.editLast() }
 
         // Updates: 10 s after launch, then every 6 h (if enabled).
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
@@ -39,6 +41,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if Settings.autoUpdate { self?.updater.check(userInitiated: false) }
             }
         }
+    }
+
+    /// Hidden for a menu bar app, but gives editor windows and text fields
+    /// their keyboard shortcuts (⌘S, ⌘Z, ⌘C, ⌘V, ⌘W …).
+    private static func mainMenu() -> NSMenu {
+        func item(_ title: String, _ action: Selector?, _ key: String, _ mods: NSEvent.ModifierFlags = .command) -> NSMenuItem {
+            let i = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            i.keyEquivalentModifierMask = mods
+            return i
+        }
+        let main = NSMenu()
+        let appMenu = NSMenu(title: "Slyy Snap")
+        appMenu.addItem(item("Quit Slyy Snap", #selector(NSApplication.terminate(_:)), "q"))
+        let fileMenu = NSMenu(title: "File")
+        fileMenu.addItem(item("Save", #selector(Editor.saveDocument(_:)), "s"))
+        fileMenu.addItem(item("Save As…", #selector(Editor.saveDocumentAs(_:)), "s", [.command, .shift]))
+        fileMenu.addItem(item("Close", #selector(NSWindow.performClose(_:)), "w"))
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(item("Undo", #selector(Editor.undoMark(_:)), "z"))
+        editMenu.addItem(.separator())
+        editMenu.addItem(item("Cut", #selector(NSText.cut(_:)), "x"))
+        editMenu.addItem(item("Copy", #selector(NSText.copy(_:)), "c"))
+        editMenu.addItem(item("Paste", #selector(NSText.paste(_:)), "v"))
+        editMenu.addItem(item("Select All", #selector(NSText.selectAll(_:)), "a"))
+        for sub in [appMenu, fileMenu, editMenu] {
+            let holder = NSMenuItem(title: sub.title, action: nil, keyEquivalent: "")
+            holder.submenu = sub
+            main.addItem(holder)
+        }
+        return main
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
@@ -53,6 +85,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
 
         let hasLast = snapper.lastSnap != nil
+        menu.addItem(ActionItem("Edit Last Snap", key: "e", mods: cs, enabled: hasLast) { snapper.editLast() })
+        menu.addItem(ActionItem("Open Image in Editor…") { Editor.chooseAndOpen() })
         menu.addItem(ActionItem("Copy Last Snap", enabled: hasLast) { snapper.copyLast() })
         menu.addItem(ActionItem("Show Last Snap in Finder", enabled: hasLast) { snapper.revealLast() })
         menu.addItem(ActionItem("Open Snaps Folder") { snapper.openFolder() })
@@ -61,6 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let options = NSMenu()
         options.autoenablesItems = false
+        options.addItem(ActionItem("Open Editor After Capture", state: Settings.openEditor) {
+            Settings.openEditor.toggle()
+        })
         options.addItem(ActionItem("Copy to Clipboard", state: Settings.copyToClipboard) {
             Settings.copyToClipboard.toggle()
         })

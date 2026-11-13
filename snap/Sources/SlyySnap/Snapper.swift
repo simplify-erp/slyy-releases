@@ -52,12 +52,17 @@ final class Snapper {
                 self.lastSnap = url
                 if Settings.copyToClipboard { Clipboard.copy(url) }
                 if Settings.playSound { NSSound(named: "Tink")?.play() }
+                if Settings.openEditor { Editor.open(url) }
             }
         }
     }
 
     func copyLast() {
         if let lastSnap { Clipboard.copy(lastSnap) }
+    }
+
+    func editLast() {
+        if let lastSnap { Editor.open(lastSnap) }
     }
 
     func revealLast() {
@@ -98,12 +103,17 @@ enum Clipboard {
     @MainActor
     static func copy(_ url: URL) {
         guard let data = try? Data(contentsOf: url) else { return }
+        copy(png: data, file: url)
+    }
+
+    @MainActor
+    static func copy(png data: Data, file url: URL?) {
         let item = NSPasteboardItem()
         item.setData(data, forType: .png)
         if let tiff = NSImage(data: data)?.tiffRepresentation {
             item.setData(tiff, forType: .tiff)
         }
-        item.setString(url.absoluteString, forType: .fileURL)
+        if let url { item.setString(url.absoluteString, forType: .fileURL) }
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.writeObjects([item])
