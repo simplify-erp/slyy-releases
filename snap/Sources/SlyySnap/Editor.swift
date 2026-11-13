@@ -68,14 +68,33 @@ struct Mark {
         }
         switch kind {
         case .arrow(let a, let b): return nearSegment(a, b)
-        case .rect(let r), .ellipse(let r), .highlight(let r), .pixelate(let r):
+        case .rect(let r): // the outline, so shapes inside a box stay clickable
+            return r.insetBy(dx: -tol, dy: -tol).contains(p) && !r.insetBy(dx: tol, dy: tol).contains(p)
+        case .ellipse(let r):
+            let rx = max(r.width / 2, 1), ry = max(r.height / 2, 1)
+            let d = hypot((p.x - r.midX) / rx, (p.y - r.midY) / ry)
+            return abs(d - 1) * min(rx, ry) <= tol
+        case .highlight(let r), .pixelate(let r):
             return r.insetBy(dx: -tol, dy: -tol).contains(p)
         case .pen(let pts):
             if pts.count == 1 { return hypot(p.x - pts[0].x, p.y - pts[0].y) <= tol }
             return zip(pts, pts.dropFirst()).contains { nearSegment($0, $1) }
+        case .text:
+            return bounds.insetBy(dx: -4, dy: -4).contains(p)
+        }
+    }
+
+    var bounds: CGRect {
+        switch kind {
+        case .arrow(let a, let b): return CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
+        case .rect(let r), .ellipse(let r), .highlight(let r), .pixelate(let r): return r
+        case .pen(let pts):
+            let xs = pts.map(\.x), ys = pts.map(\.y)
+            guard let x0 = xs.min(), let x1 = xs.max(), let y0 = ys.min(), let y1 = ys.max() else { return .zero }
+            return CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
         case .text(let at, let s):
             let size = (s as NSString).size(withAttributes: [.font: NSFont.boldSystemFont(ofSize: EditorCanvas.fontSize(width))])
-            return CGRect(origin: at, size: size).insetBy(dx: -4, dy: -4).contains(p)
+            return CGRect(origin: at, size: size)
         }
     }
 
@@ -108,8 +127,8 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
         }
     }
     private var moving: (index: Int, original: [Mark])?
-    var color: NSColor = .systemRed
-    var lineWidth: CGFloat = 4
+    var color: NSColor = .systemRed { didSet { styleTextField() } }
+    var lineWidth: CGFloat = 4 { didSet { styleTextField() } }
     var onChange: (() -> Void)?
     var onToolChange: ((Tool) -> Void)?
 
@@ -125,12 +144,19 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
 
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func resetCursorRects() { addCursorRect(bounds, cursor: tool == .move ? .openHand : .crosshair) }
 
     // MARK: Drawing
 
     override func draw(_ dirtyRect: NSRect) {
-        render(draft.map { marks + [$0] } ?? marks)
+        var visible = marks
+        if let i = editingIndex, visible.indices.contains(i) { visible.remove(at: i) }
+        render(draft.map { visible + [$0] } ?? visible)
+        if let i = selected, i != editingIndex, marks.indices.contains(i) {
+            let outline = NSBezierPath(rect: marks[i].bounds.insetBy(dx: -5, dy: -5))
+            outline.setLineDash([4, 3], count: 2, phase: 0)
+            NSColor.controlAccentColor.setStroke()
+            outline.stroke()
+        }
         if let c = draftCrop ?? crop {
             let shade = NSBezierPath(rect: bounds)
             shade.appendRect(c)
@@ -246,6 +272,7 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
             NSSound.beep()
             return
         }
+        selected = nil
         marks = last.0
         crop = last.1
         changeCount += 1
@@ -253,21 +280,50 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
         onChange?()
     }
 
+    // MARK: Selection (click a mark: select, drag: move, click text: edit)
+
+    private(set) var selected: Int? {
+        didSet {
+            needsDisplay = true
+            onSelectionChange?(selected.flatMap { marks.indices.contains($0) ? marks[$0] : nil })
+        }
+    }
+    var onSelectionChange: ((Mark?) -> Void)?
+
+    /// Apply a property change (color, width) to the selected mark, undoable.
+    func updateSelection(_ change: (inout Mark) -> Void) {
+        guard textField == nil, let i = selected, marks.indices.contains(i) else { return }
+        commit { change(&marks[i]) }
+    }
+
+    private func deleteSelection() {
+        guard let i = selected, marks.indices.contains(i) else { return }
+        selected = nil; commit { marks.remove(at: i) }
+    }
+
+    private func hitMark(at p: CGPoint) -> Int? {
+        marks.indices.reversed().first { $0 != editingIndex && marks[$0].contains(p) }
+    }
+
+    override func resetCursorRects() { addCursorRect(bounds, cursor: tool == .move ? .openHand : .crosshair) }
+
     private func point(_ event: NSEvent) -> CGPoint {
         let p = convert(event.locationInWindow, from: nil)
         return CGPoint(x: min(max(p.x, 0), bounds.width), y: min(max(p.y, 0), bounds.height))
     }
 
     override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(self)
+        window?.makeFirstResponder(self) // ends a running text edit first
         start = point(event)
+        if tool != .crop, let i = hitMark(at: start) {
+            selected = i
+            moving = (i, marks)
+            NSCursor.closedHand.set()
+            return
+        }
+        selected = nil
         switch tool {
-        case .move:
-            if let i = marks.indices.reversed().first(where: { marks[$0].contains(start) }) {
-                moving = (i, marks)
-                NSCursor.closedHand.set()
-            }
-        case .text: addText(at: start)
+        case .text: openTextField(text: "", at: CGPoint(x: start.x - 3, y: start.y - Self.fieldHeight(lineWidth) / 2))
         case .pen: draft = Mark(kind: .pen([start]), color: color, width: lineWidth)
         default: break
         }
@@ -275,12 +331,13 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
 
     override func mouseDragged(with event: NSEvent) {
         let p = point(event)
+        if let m = moving {
+            marks[m.index] = m.original[m.index].offsetBy(dx: p.x - start.x, dy: p.y - start.y)
+            needsDisplay = true
+            return
+        }
         let r = CGRect(x: min(start.x, p.x), y: min(start.y, p.y), width: abs(p.x - start.x), height: abs(p.y - start.y))
         switch tool {
-        case .move:
-            if let m = moving {
-                marks[m.index] = m.original[m.index].offsetBy(dx: p.x - start.x, dy: p.y - start.y)
-            }
         case .arrow: draft = Mark(kind: .arrow(start, p), color: color, width: lineWidth)
         case .rect: draft = Mark(kind: .rect(r), color: color, width: lineWidth)
         case .ellipse: draft = Mark(kind: .ellipse(r), color: color, width: lineWidth)
@@ -292,7 +349,7 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
                 draft?.kind = .pen(pts)
             }
         case .crop: draftCrop = r
-        case .text: break
+        case .move, .text: break
         }
         needsDisplay = true
     }
@@ -306,6 +363,7 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
             } else {
                 marks = m.original
                 needsDisplay = true
+                if case .text = marks[m.index].kind { editText(m.index) } // plain click on text: edit it
             }
             return
         }
@@ -326,26 +384,32 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
         let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if mods.isEmpty, let t = Tool.allCases.first(where: { $0.key == chars }) {
             tool = t
-        } else if event.keyCode == 53 { // Esc: drop the shape being drawn
+        } else if event.keyCode == 51 || event.keyCode == 117, selected != nil { // Delete / forward delete
+            deleteSelection()
+        } else if event.keyCode == 53 { // Esc: drop the shape being drawn, deselect
             draft = nil
             draftCrop = nil
+            selected = nil
             needsDisplay = true
         } else {
             super.keyDown(with: event)
         }
     }
 
-    // MARK: Text (typed in place)
+    // MARK: Text (typed and edited in place)
 
     private var textField: NSTextField?
     private var textCancelled = false
+    private var editingIndex: Int?
 
-    private func addText(at p: CGPoint) {
+    nonisolated static func fieldHeight(_ width: CGFloat) -> CGFloat { ceil(fontSize(width) * 1.4) }
+    nonisolated static func lineHeight(_ w: CGFloat) -> CGFloat { NSLayoutManager().defaultLineHeight(for: .boldSystemFont(ofSize: fontSize(w))) }
+
+    private func openTextField(text: String, at origin: CGPoint) {
         let size = Self.fontSize(lineWidth)
-        let font = NSFont.boldSystemFont(ofSize: size)
-        let height = ceil(size * 1.4)
-        let field = NSTextField(frame: NSRect(x: p.x - 3, y: p.y - height / 2, width: max(120, size * 6), height: height))
-        field.font = font
+        let field = NSTextField(frame: NSRect(x: origin.x, y: origin.y, width: max(120, size * 6), height: Self.fieldHeight(lineWidth)))
+        field.stringValue = text
+        field.font = NSFont.boldSystemFont(ofSize: size)
         field.textColor = color
         field.isBordered = false
         field.drawsBackground = false
@@ -357,7 +421,35 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
         addSubview(field)
         textField = field
         textCancelled = false
+        fitTextField()
         window?.makeFirstResponder(field)
+    }
+
+    /// Edit an existing text mark in place (hidden while its field is open).
+    private func editText(_ i: Int) {
+        guard case .text(let at, let s) = marks[i].kind else { return }
+        selected = i
+        color = marks[i].color
+        lineWidth = marks[i].width
+        editingIndex = i
+        needsDisplay = true
+        let pad = (Self.fieldHeight(lineWidth) - Self.lineHeight(lineWidth)) / 2
+        openTextField(text: s, at: CGPoint(x: at.x - 2, y: at.y - max(0, pad)))
+    }
+
+    /// Color/size changes while typing go to the open field.
+    private func styleTextField() {
+        guard let field = textField else { return }
+        field.textColor = color
+        field.font = NSFont.boldSystemFont(ofSize: Self.fontSize(lineWidth))
+        field.frame.size.height = Self.fieldHeight(lineWidth)
+        fitTextField()
+    }
+
+    private func fitTextField() {
+        guard let field = textField, let font = field.font else { return }
+        let w = (field.stringValue as NSString).size(withAttributes: [.font: font]).width + 24
+        field.frame.size.width = min(max(120, w), max(120, bounds.width - field.frame.minX))
     }
 
     /// End text entry (places the text unless cancelled); used before save/copy.
@@ -365,11 +457,7 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
         if textField != nil { window?.makeFirstResponder(self) }
     }
 
-    func controlTextDidChange(_ obj: Notification) {
-        guard let field = textField, let font = field.font else { return }
-        let w = (field.stringValue as NSString).size(withAttributes: [.font: font]).width + 24
-        field.frame.size.width = min(max(120, w), max(120, bounds.width - field.frame.minX))
-    }
+    func controlTextDidChange(_ obj: Notification) { fitTextField() }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         if selector == #selector(NSResponder.cancelOperation(_:)) {
@@ -387,21 +475,23 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
     func controlTextDidEndEditing(_ obj: Notification) {
         guard let field = textField else { return }
         textField = nil
+        let editing = editingIndex
+        editingIndex = nil
         let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fieldColor = field.textColor ?? color
-        let fontSize = field.font?.pointSize ?? Self.fontSize(lineWidth)
         let frame = field.frame
         field.removeFromSuperview()
-        if textCancelled || text.isEmpty {
-            needsDisplay = true
-            return
-        }
+        needsDisplay = true
+        if textCancelled { return }
         // Same spot as typed: text field inset 2 pt, line box vertically centered.
-        let lineHeight = NSLayoutManager().defaultLineHeight(for: NSFont.boldSystemFont(ofSize: fontSize))
-        let at = CGPoint(x: frame.minX + 2, y: frame.minY + max(0, (frame.height - lineHeight) / 2))
-        let width = (fontSize - 12) / 4
-        let mark = Mark(kind: .text(at, text), color: fieldColor, width: width)
-        commit { marks.append(mark) }
+        let at = CGPoint(x: frame.minX + 2, y: frame.minY + max(0, (frame.height - Self.lineHeight(lineWidth)) / 2))
+        let mark = Mark(kind: .text(at, text), color: color, width: lineWidth)
+        if let i = editing, marks.indices.contains(i) {
+            selected = text.isEmpty ? nil : i
+            commit { if text.isEmpty { marks.remove(at: i) } else { marks[i] = mark } }
+        } else if !text.isEmpty {
+            commit { marks.append(mark) }
+            selected = marks.count - 1
+        }
     }
 
     // MARK: Export
@@ -471,6 +561,9 @@ final class Editor: NSObject, NSWindowDelegate, NSPopoverDelegate {
     private let canvas: EditorCanvas
     private let scroll = NSScrollView()
     private let tools = NSSegmentedControl()
+    private let colorWell = NSColorWell(frame: NSRect(x: 0, y: 0, width: 44, height: 24))
+    private let widths = NSPopUpButton(frame: .zero, pullsDown: false)
+    private static let widthSteps: [CGFloat] = [2, 4, 8]
     private var savedChangeCount = 0
 
     private var isDirty: Bool { canvas.changeCount != savedChangeCount }
@@ -489,6 +582,12 @@ final class Editor: NSObject, NSWindowDelegate, NSPopoverDelegate {
         buildUI()
         canvas.onChange = { [weak self] in self?.updateTitle() }
         canvas.onToolChange = { [weak self] t in self?.tools.selectedSegment = t.rawValue }
+        canvas.onSelectionChange = { [weak self] mark in
+            guard let self, let mark else { return }
+            self.colorWell.color = mark.color
+            let steps = Editor.widthSteps
+            self.widths.selectItem(at: steps.indices.min { abs(steps[$0] - mark.width) < abs(steps[$1] - mark.width) } ?? 1)
+        }
         window.onTitleClick = { [weak self] rect in self?.showRename(at: rect) }
     }
 
@@ -508,14 +607,12 @@ final class Editor: NSObject, NSWindowDelegate, NSPopoverDelegate {
         tools.target = self
         tools.action = #selector(toolChanged(_:))
 
-        let colorWell = NSColorWell(frame: NSRect(x: 0, y: 0, width: 44, height: 24))
         colorWell.color = canvas.color
         colorWell.target = self
         colorWell.action = #selector(colorChanged(_:))
         colorWell.toolTip = "Color"
         colorWell.widthAnchor.constraint(equalToConstant: 44).isActive = true
 
-        let widths = NSPopUpButton(frame: .zero, pullsDown: false)
         widths.addItems(withTitles: ["Thin", "Medium", "Thick"])
         widths.selectItem(at: 1)
         widths.target = self
@@ -590,13 +687,15 @@ final class Editor: NSObject, NSWindowDelegate, NSPopoverDelegate {
     }
 
     @objc private func colorChanged(_ sender: NSColorWell) {
-        canvas.color = sender.color
+        let c = sender.color
+        canvas.color = c
+        canvas.updateSelection { $0.color = c }
     }
 
     @objc private func widthChanged(_ sender: NSPopUpButton) {
-        let widths: [CGFloat] = [2, 4, 8]
-        canvas.lineWidth = widths[max(0, min(2, sender.indexOfSelectedItem))]
-        window.makeFirstResponder(canvas)
+        let w = Editor.widthSteps[max(0, min(2, sender.indexOfSelectedItem))]
+        canvas.lineWidth = w
+        canvas.updateSelection { $0.width = w }
     }
 
     @objc func undoMark(_ sender: Any?) {
