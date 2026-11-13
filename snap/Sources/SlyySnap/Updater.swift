@@ -17,12 +17,8 @@ struct Version: Comparable, CustomStringConvertible {
 
     init?(_ s: String) {
         let comps = s.split(separator: ".", omittingEmptySubsequences: false)
-        guard comps.count == 3 else { return nil }
-        var parts: [Int] = []
-        for c in comps {
-            guard !c.isEmpty, c.allSatisfy({ $0.isASCII && $0.isNumber }), let n = Int(c) else { return nil }
-            parts.append(n)
-        }
+        let parts = comps.compactMap { c in c.allSatisfy({ $0.isASCII && $0.isNumber }) ? Int(c) : nil }
+        guard comps.count == 3, parts.count == 3 else { return nil }
         self.parts = parts
     }
 

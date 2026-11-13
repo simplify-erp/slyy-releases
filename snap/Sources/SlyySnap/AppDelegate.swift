@@ -10,7 +10,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var updateTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        Settings.registerDefaults()
         updater.cleanUp()
         if CGPreflightScreenCaptureAccess() { Settings.hadScreenAccess = true }
         NSApp.mainMenu = Self.mainMenu()

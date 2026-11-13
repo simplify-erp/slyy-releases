@@ -33,15 +33,7 @@ final class Snapper {
 
         busy = true
         DispatchQueue.global(qos: .userInitiated).async {
-            let p = Process()
-            p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-            p.arguments = args
-            do {
-                try p.run()
-                p.waitUntilExit()
-            } catch {
-                NSLog("Slyy Snap: screencapture failed: \(error)")
-            }
+            try? Updater.run("/usr/sbin/screencapture", args) // non-zero exit = cancelled
             DispatchQueue.main.async {
                 self.busy = false
                 // No file: the user pressed Esc.
