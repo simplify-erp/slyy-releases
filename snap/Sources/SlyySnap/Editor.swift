@@ -123,7 +123,6 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
     var tool: Tool = .arrow {
         didSet {
             onToolChange?(tool)
-            window?.invalidateCursorRects(for: self)
         }
     }
     private var moving: (index: Int, original: [Mark])?
@@ -305,7 +304,12 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
         marks.indices.reversed().first { $0 != editingIndex && marks[$0].contains(p) }
     }
 
-    override func resetCursorRects() { addCursorRect(bounds, cursor: tool == .move ? .openHand : .crosshair) }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if trackingAreas.isEmpty { addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .cursorUpdate, .activeInKeyWindow, .inVisibleRect], owner: self, userInfo: nil)) }
+    }
+    override func mouseMoved(with event: NSEvent) { (tool == .move || hitMark(at: point(event)) != nil ? NSCursor.openHand : .crosshair).set() }
+    override func cursorUpdate(with event: NSEvent) { mouseMoved(with: event) }
 
     private func point(_ event: NSEvent) -> CGPoint {
         let p = convert(event.locationInWindow, from: nil)

@@ -1,5 +1,9 @@
 # Slyy Shot changelog (formerly Slyy Snap)
 
+## 1.3.1
+
+- Editor: open-hand cursor when hovering over a movable item.
+
 ## 1.3.0
 
 - Renamed to Slyy Shot: the app renames itself to "Slyy Shot.app" and moves
