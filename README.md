@@ -37,3 +37,15 @@ Then open a new terminal and run `slyy`. Updates: `slyy update`. Remove: `slyy u
    setup overlay.
 
 Deutsch: siehe LIESMICH.txt im DMG.
+
+## Slyy Snap (personal screenshot tool, macOS 13+)
+
+Menu bar app: ⌃⇧1 area, ⌃⇧2 window, ⌃⇧3 screen. Saves PNGs to
+~/Pictures/Slyy Snap and copies them to the clipboard. Install or update:
+
+    curl -fsSL https://raw.githubusercontent.com/simplify-erp/slyy-releases/main/snap-install.sh | sh
+
+The app checks for updates itself (menu > Check for Updates…; checksum and
+signature verified). Remove: same command with `sh -s -- --uninstall`.
+Releases are the `slyy-snap-v*` tags (never "Latest"); source in `snap/`,
+built and published by `.github/workflows/slyy-snap.yml`.

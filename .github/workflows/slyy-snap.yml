@@ -1,0 +1,81 @@
+name: Slyy Snap release
+
+# Builds snap/ on macOS and publishes release slyy-snap-v<version> with
+# SlyySnap-<version>.zip + SHA256SUMS. Never takes the "Latest" badge
+# (that stays with Slyy Desktop).
+#
+# Release: bump snap/CHANGELOG.md, then either push a tag
+#   git tag slyy-snap-v1.0.1 && git push origin slyy-snap-v1.0.1
+# or run this workflow by hand with the version.
+#
+# Optional, stable code signature (so macOS keeps the Screen Recording
+# permission across updates; ad-hoc signed builds must be re-allowed after each
+# update): repository secrets SNAP_SIGN_P12 (base64 .p12 with a codesigning
+# certificate, self-signed is fine), SNAP_SIGN_P12_PASSWORD, SNAP_SIGN_IDENTITY
+# (certificate common name).
+
+on:
+  push:
+    tags: ['slyy-snap-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version, e.g. 1.0.1'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency: slyy-snap-release
+
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      INPUT_VERSION: ${{ inputs.version }}
+      SNAP_SIGN_P12: ${{ secrets.SNAP_SIGN_P12 }}
+      SNAP_SIGN_P12_PASSWORD: ${{ secrets.SNAP_SIGN_P12_PASSWORD }}
+      SNAP_SIGN_IDENTITY: ${{ secrets.SNAP_SIGN_IDENTITY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then v="${INPUT_VERSION#v}"; else v="${GITHUB_REF_NAME#slyy-snap-v}"; fi
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "invalid version '$v'"; exit 1; }
+          echo "VERSION=$v" >>"$GITHUB_ENV"
+
+      - name: Signing certificate (optional)
+        if: env.SNAP_SIGN_P12 != ''
+        run: |
+          kc="$RUNNER_TEMP/snap.keychain-db"; pw="$(uuidgen)"
+          security create-keychain -p "$pw" "$kc"
+          security set-keychain-settings -lut 3600 "$kc"
+          security unlock-keychain -p "$pw" "$kc"
+          echo "$SNAP_SIGN_P12" | base64 --decode >"$RUNNER_TEMP/snap.p12"
+          security import "$RUNNER_TEMP/snap.p12" -k "$kc" -P "$SNAP_SIGN_P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$pw" "$kc"
+          security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
+          echo "SIGN_IDENTITY=$SNAP_SIGN_IDENTITY" >>"$GITHUB_ENV"
+
+      - name: Build
+        run: snap/scripts/build.sh "$VERSION"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="slyy-snap-v$VERSION"
+          awk -v v="## $VERSION" '$0 == v { on = 1; next } /^## / { on = 0 } on' snap/CHANGELOG.md >"$RUNNER_TEMP/notes.md"
+          {
+            echo
+            echo 'Install or update (macOS 13+):'
+            echo
+            echo '    curl -fsSL https://raw.githubusercontent.com/simplify-erp/slyy-releases/main/snap-install.sh | sh'
+          } >>"$RUNNER_TEMP/notes.md"
+          gh release create "$tag" \
+            "snap/dist/SlyySnap-$VERSION.zip" snap/dist/SHA256SUMS \
+            --title "Slyy Snap $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            --target "$GITHUB_SHA" \
+            --latest=false
