@@ -8,47 +8,23 @@ import UniformTypeIdentifiers
 enum Tool: Int, CaseIterable {
     case move, arrow, rect, ellipse, pen, highlight, text, pixelate, crop
 
-    var title: String {
+    private var info: (title: String, symbol: String, key: String) {
         switch self {
-        case .move: return "Move (V)"
-        case .arrow: return "Arrow (A)"
-        case .rect: return "Box (R)"
-        case .ellipse: return "Ellipse (O)"
-        case .pen: return "Pen (P)"
-        case .highlight: return "Highlight (H)"
-        case .text: return "Text (T)"
-        case .pixelate: return "Pixelate (X)"
-        case .crop: return "Crop (C)"
+        case .move: return ("Move (V)", "hand.point.up.left", "v")
+        case .arrow: return ("Arrow (A)", "arrow.up.right", "a")
+        case .rect: return ("Box (R)", "rectangle", "r")
+        case .ellipse: return ("Ellipse (O)", "circle", "o")
+        case .pen: return ("Pen (P)", "scribble", "p")
+        case .highlight: return ("Highlight (H)", "highlighter", "h")
+        case .text: return ("Text (T)", "textformat", "t")
+        case .pixelate: return ("Pixelate (X)", "square.grid.3x3.fill", "x")
+        case .crop: return ("Crop (C)", "crop", "c")
         }
     }
 
-    var symbol: String {
-        switch self {
-        case .move: return "hand.point.up.left"
-        case .arrow: return "arrow.up.right"
-        case .rect: return "rectangle"
-        case .ellipse: return "circle"
-        case .pen: return "scribble"
-        case .highlight: return "highlighter"
-        case .text: return "textformat"
-        case .pixelate: return "square.grid.3x3.fill"
-        case .crop: return "crop"
-        }
-    }
-
-    var key: String {
-        switch self {
-        case .move: return "v"
-        case .arrow: return "a"
-        case .rect: return "r"
-        case .ellipse: return "o"
-        case .pen: return "p"
-        case .highlight: return "h"
-        case .text: return "t"
-        case .pixelate: return "x"
-        case .crop: return "c"
-        }
-    }
+    var title: String { info.title }
+    var symbol: String { info.symbol }
+    var key: String { info.key }
 }
 
 struct Mark {
@@ -197,12 +173,9 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
             tip.line(to: CGPoint(x: b.x - head * cos(angle + .pi / 7), y: b.y - head * sin(angle + .pi / 7)))
             tip.close()
             tip.fill()
-        case .rect(let r):
-            let p = NSBezierPath(roundedRect: r, xRadius: 3, yRadius: 3)
-            p.lineWidth = m.width
-            p.stroke()
-        case .ellipse(let r):
-            let p = NSBezierPath(ovalIn: r)
+        case .rect(let r), .ellipse(let r):
+            let p: NSBezierPath
+            if case .rect = m.kind { p = NSBezierPath(roundedRect: r, xRadius: 3, yRadius: 3) } else { p = NSBezierPath(ovalIn: r) }
             p.lineWidth = m.width
             p.stroke()
         case .pen(let pts):
@@ -256,8 +229,13 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
     // MARK: Editing
 
     private func commit(_ change: () -> Void) {
-        undoStack.append((marks, crop))
+        let before = (marks, crop)
         change()
+        recordChange(undoTo: before)
+    }
+
+    private func recordChange(undoTo before: ([Mark], CGRect?)) {
+        undoStack.append(before)
         changeCount += 1
         needsDisplay = true
         onChange?()
@@ -324,13 +302,11 @@ final class EditorCanvas: NSView, NSTextFieldDelegate {
             moving = nil
             NSCursor.openHand.set()
             if hypot(point(event).x - start.x, point(event).y - start.y) > 0.5 {
-                undoStack.append((m.original, crop))
-                changeCount += 1
-                onChange?()
+                recordChange(undoTo: (m.original, crop))
             } else {
                 marks = m.original
+                needsDisplay = true
             }
-            needsDisplay = true
             return
         }
         let finishedDraft = draft
@@ -508,9 +484,8 @@ final class Editor: NSObject, NSWindowDelegate, NSPopoverDelegate {
         super.init()
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.title = url.lastPathComponent
-        window.representedURL = url
         window.minSize = NSSize(width: 560, height: 320)
+        setURL(url)
         buildUI()
         canvas.onChange = { [weak self] in self?.updateTitle() }
         canvas.onToolChange = { [weak self] t in self?.tools.selectedSegment = t.rawValue }
@@ -635,13 +610,11 @@ final class Editor: NSObject, NSWindowDelegate, NSPopoverDelegate {
         NSSound(named: "Tink")?.play()
     }
 
+    private var canSaveInPlace: Bool { url.pathExtension.lowercased() == "png" }
+
     @objc func saveDocument(_ sender: Any?) {
         canvas.finishText()
-        if ["png"].contains(url.pathExtension.lowercased()) {
-            write(to: url)
-        } else {
-            saveDocumentAs(sender)
-        }
+        if canSaveInPlace { write(to: url) } else { saveDocumentAs(sender) }
     }
 
     @objc func saveDocumentAs(_ sender: Any?) {
@@ -667,9 +640,7 @@ final class Editor: NSObject, NSWindowDelegate, NSPopoverDelegate {
             Alerts.info("Save failed", error.localizedDescription)
             return false
         }
-        url = target
-        window.title = target.lastPathComponent
-        window.representedURL = target
+        setURL(target)
         savedChangeCount = canvas.changeCount
         updateTitle()
         if Settings.copyToClipboard { Clipboard.copy(png: png, file: target) }
@@ -688,7 +659,7 @@ final class Editor: NSObject, NSWindowDelegate, NSPopoverDelegate {
         alert.addButton(withTitle: "Don't Save")
         switch alert.runModal() {
         case .alertFirstButtonReturn:
-            if ["png"].contains(url.pathExtension.lowercased()) { return write(to: url) }
+            if canSaveInPlace { return write(to: url) }
             saveDocumentAs(nil)
             return false
         case .alertThirdButtonReturn:
@@ -754,10 +725,14 @@ final class Editor: NSObject, NSWindowDelegate, NSPopoverDelegate {
             return
         }
         let old = url
-        url = target
-        window.title = target.lastPathComponent
-        window.representedURL = target
+        setURL(target)
         Editor.onRename?(old, target)
+    }
+
+    private func setURL(_ new: URL) {
+        url = new
+        window.title = new.lastPathComponent
+        window.representedURL = new
     }
 
     func windowWillClose(_ notification: Notification) {

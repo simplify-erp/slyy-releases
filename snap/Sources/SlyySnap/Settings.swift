@@ -4,15 +4,6 @@ import Foundation
 enum Settings {
     private static var d: UserDefaults { .standard }
 
-    static func registerDefaults() {
-        d.register(defaults: [
-            "copyToClipboard": true,
-            "playSound": true,
-            "autoUpdate": true,
-            "openEditor": false,
-        ])
-    }
-
     /// Where snaps are saved. Default: ~/Pictures/Slyy Snap
     static var folder: URL {
         get {
@@ -26,42 +17,26 @@ enum Settings {
         set { d.set(newValue.path, forKey: "folder") }
     }
 
-    static var copyToClipboard: Bool {
-        get { d.bool(forKey: "copyToClipboard") }
-        set { d.set(newValue, forKey: "copyToClipboard") }
-    }
-
-    static var playSound: Bool {
-        get { d.bool(forKey: "playSound") }
-        set { d.set(newValue, forKey: "playSound") }
-    }
-
-    /// Open the editor right after each capture (otherwise: floating thumbnail
-    /// with an Edit button).
-    static var openEditor: Bool {
-        get { d.bool(forKey: "openEditor") }
-        set { d.set(newValue, forKey: "openEditor") }
-    }
-
-    static var autoUpdate: Bool {
-        get { d.bool(forKey: "autoUpdate") }
-        set { d.set(newValue, forKey: "autoUpdate") }
-    }
-
+    @Pref("copyToClipboard", true) static var copyToClipboard: Bool
+    @Pref("playSound", true) static var playSound: Bool
+    /// Open the editor right after each capture (otherwise: floating thumbnail with an Edit button).
+    @Pref("openEditor", false) static var openEditor: Bool
+    @Pref("autoUpdate", true) static var autoUpdate: Bool
     /// Screen Recording was granted at some point (detects a grant lost by an update).
-    static var hadScreenAccess: Bool {
-        get { d.bool(forKey: "hadScreenAccess") }
-        set { d.set(newValue, forKey: "hadScreenAccess") }
-    }
-
+    @Pref("hadScreenAccess", false) static var hadScreenAccess: Bool
     /// Highest snap number used (slyy-NNNNN.png).
-    static var lastSnapNumber: Int {
-        get { d.integer(forKey: "lastSnapNumber") }
-        set { d.set(newValue, forKey: "lastSnapNumber") }
-    }
+    @Pref("lastSnapNumber", 0) static var lastSnapNumber: Int
+    @Pref("skippedVersion", nil) static var skippedVersion: String?
+}
 
-    static var skippedVersion: String? {
-        get { d.string(forKey: "skippedVersion") }
-        set { d.set(newValue, forKey: "skippedVersion") }
+/// A UserDefaults value with its default.
+@propertyWrapper
+struct Pref<T> {
+    let key: String
+    let fallback: T
+    init(_ key: String, _ fallback: T) { self.key = key; self.fallback = fallback }
+    var wrappedValue: T {
+        get { UserDefaults.standard.object(forKey: key) as? T ?? fallback }
+        nonmutating set { UserDefaults.standard.set(newValue, forKey: key) }
     }
 }
