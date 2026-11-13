@@ -35,7 +35,8 @@ plutil -lint "$app/Contents/Info.plist"
 
 
 identity="${SIGN_IDENTITY:--}"
-case "$identity" in
+# SIGN_IDENTITY may be a SHA-1 fingerprint; SIGN_NAME then carries the name.
+case "${SIGN_NAME:-$identity}" in
 "Developer ID"*) ts=--timestamp ;; # secure timestamp (required for notarization)
 *) ts=--timestamp=none ;;          # ad-hoc or self-signed
 esac
@@ -107,7 +108,7 @@ if [ "$notarize" = yes ]; then
 	spctl --assess --type open --context context:primary-signature --verbose=2 "dist/$dmg"
 	spctl --assess --type execute --verbose=2 "$app"
 fi
-echo "signed: $identity  notarized: $notarize"
+echo "signed: ${SIGN_NAME:-$identity}  notarized: $notarize"
 
 (cd dist && shasum -a 256 "$zip" "$dmg" >SHA256SUMS)
 cat dist/SHA256SUMS

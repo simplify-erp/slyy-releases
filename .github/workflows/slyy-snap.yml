@@ -104,7 +104,19 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$pw" "$kc"
           security list-keychains -d user -s "$kc" $(security list-keychains -d user | tr -d '"')
           security find-identity -p codesigning "$kc"
-          echo "SIGN_IDENTITY=$SNAP_SIGN_IDENTITY" >>"$GITHUB_ENV"
+          # Sign by SHA-1 fingerprint (immune to typos/quotes in the identity
+          # secret): the identity whose name contains SNAP_SIGN_IDENTITY, else
+          # the only/first one in the imported keychain.
+          want=$(printf '%s' "$SNAP_SIGN_IDENTITY" | tr -d '"\r\n' | sed 's/^ *//; s/ *$//')
+          ids=$(security find-identity -p codesigning "$kc" | grep -E '^ *[0-9]+\) [0-9A-F]{40} ' || true)
+          line=$(printf '%s\n' "$ids" | grep -F "\"$want" | head -n 1)
+          [ -n "$line" ] || line=$(printf '%s\n' "$ids" | head -n 1)
+          [ -n "$line" ] || { echo "no code signing identity in the imported .p12"; exit 1; }
+          hash=$(printf '%s\n' "$line" | awk '{print $2}')
+          name=$(printf '%s\n' "$line" | sed 's/^[^"]*"//; s/".*//')
+          echo "signing with: $name ($hash)"
+          echo "SIGN_IDENTITY=$hash" >>"$GITHUB_ENV"
+          echo "SIGN_NAME=$name" >>"$GITHUB_ENV"
 
       - name: Notary key (optional)
         if: env.NOTARY_KEY_P8 != ''
