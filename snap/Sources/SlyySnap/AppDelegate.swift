@@ -147,6 +147,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let optionsItem = NSMenuItem(title: "Options", action: nil, keyEquivalent: "")
         optionsItem.submenu = options
         menu.addItem(optionsItem)
+        options.addItem(.separator())
+        options.addItem(ActionItem("Reset Screen Recording Permission…") { snapper.resetScreenRecordingPermission() })
         menu.addItem(ActionItem("Check for Updates…") { updater.check(userInitiated: true) })
         menu.addItem(.separator())
         menu.addItem(ActionItem("Slyy Snap \(Version.current)", enabled: false) {})
