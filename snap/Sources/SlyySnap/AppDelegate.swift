@@ -28,13 +28,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         statusItem.menu = menu
 
-        // ⌃⇧1 area, ⌃⇧2 window, ⌃⇧3 screen, ⌃⇧E edit last (⌘⇧3/4/5 stay with macOS).
-        let mods = controlKey | shiftKey
+        // ⌘⇧5 area, ⌘⇧4 window, ⌘⇧3 screen (macOS' own screenshot shortcuts must be off), ⌃⇧E edit last.
+        let mods = cmdKey | shiftKey
         let snapper = self.snapper
-        HotKeys.shared.register(id: 1, keyCode: kVK_ANSI_1, modifiers: mods) { snapper.capture(.area) }
-        HotKeys.shared.register(id: 2, keyCode: kVK_ANSI_2, modifiers: mods) { snapper.capture(.window) }
+        HotKeys.shared.register(id: 1, keyCode: kVK_ANSI_5, modifiers: mods) { snapper.capture(.area) }
+        HotKeys.shared.register(id: 2, keyCode: kVK_ANSI_4, modifiers: mods) { snapper.capture(.window) }
         HotKeys.shared.register(id: 3, keyCode: kVK_ANSI_3, modifiers: mods) { snapper.capture(.screen) }
-        HotKeys.shared.register(id: 4, keyCode: kVK_ANSI_E, modifiers: mods) { snapper.editLast() }
+        HotKeys.shared.register(id: 4, keyCode: kVK_ANSI_E, modifiers: controlKey | shiftKey) { snapper.editLast() }
+        offerToFreeSystemShortcuts()
 
         // Updates: 10 s after launch, then every 6 h (if enabled).
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
@@ -109,9 +110,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let snapper = self.snapper
         let updater = self.updater
 
-        menu.addItem(ActionItem("Capture Area", key: "1", mods: cs) { snapper.capture(.area) })
-        menu.addItem(ActionItem("Capture Window", key: "2", mods: cs) { snapper.capture(.window) })
-        menu.addItem(ActionItem("Capture Screen", key: "3", mods: cs) { snapper.capture(.screen) })
+        menu.addItem(ActionItem("Capture Area", key: "5", mods: [.command, .shift]) { snapper.capture(.area) })
+        menu.addItem(ActionItem("Capture Window", key: "4", mods: [.command, .shift]) { snapper.capture(.window) })
+        menu.addItem(ActionItem("Capture Screen", key: "3", mods: [.command, .shift]) { snapper.capture(.screen) })
         menu.addItem(.separator())
 
         let hasLast = snapper.lastSnap != nil

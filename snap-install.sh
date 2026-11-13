@@ -116,7 +116,7 @@ main() {
 	xattr -dr com.apple.quarantine "$dir/$APP" 2>/dev/null || true
 	say "installed $dir/$APP ($ver)"
 	open "$dir/$APP"
-	say "running: camera icon in the menu bar. ⌃⇧1 area, ⌃⇧2 window, ⌃⇧3 screen."
+	say "running: camera icon in the menu bar. ⌘⇧5 area, ⌘⇧4 window, ⌘⇧3 screen."
 	say "first capture: allow Slyy Shot under System Settings > Privacy & Security > Screen Recording, then relaunch it."
 }
 

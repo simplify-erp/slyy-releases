@@ -1,5 +1,10 @@
 # Slyy Shot changelog (formerly Slyy Snap)
 
+## 1.4.0
+
+- Shortcuts: ⌘⇧5 area, ⌘⇧4 window, ⌘⇧3 screen (⌃⇧E edit last). Shows once
+  where to switch off macOS' own screenshot shortcuts, which otherwise win.
+
 ## 1.3.4
 
 - Editor: small shots are centered in the window.
