@@ -1,10 +1,14 @@
 # Slyy Snap changelog
 
-## 1.0.2
+## 1.1.0
 
-- Signed with Developer ID and notarized: opens without the "Open Anyway" step
-  and keeps the Screen Recording permission across updates.
-- Updates must be signed by the same developer team.
+- Editor: opens after each capture (switch off under Options) or via
+  "Edit Last Snap" (⌃⇧E) / "Open Image in Editor…".
+  Tools: arrow, box, ellipse, pen, highlight, text, pixelate, crop
+  (keys A R O P H T X C), color, 3 line widths, undo (⌘Z),
+  copy (⌘C), save (⌘S), save as (⇧⌘S).
+- Release pipeline ready for Developer ID signing + notarization; once active,
+  updates are only accepted from the same signing team.
 
 ## 1.0.1
 

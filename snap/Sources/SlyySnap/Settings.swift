@@ -9,6 +9,7 @@ enum Settings {
             "copyToClipboard": true,
             "playSound": true,
             "autoUpdate": true,
+            "openEditor": true,
         ])
     }
 
@@ -33,6 +34,12 @@ enum Settings {
     static var playSound: Bool {
         get { d.bool(forKey: "playSound") }
         set { d.set(newValue, forKey: "playSound") }
+    }
+
+    /// Open the editor right after each capture.
+    static var openEditor: Bool {
+        get { d.bool(forKey: "openEditor") }
+        set { d.set(newValue, forKey: "openEditor") }
     }
 
     static var autoUpdate: Bool {
