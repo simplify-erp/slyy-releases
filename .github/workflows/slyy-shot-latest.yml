@@ -1,0 +1,20 @@
+name: Slyy Shot latest link
+# Copies a Slyy Shot release's DMG to the rolling release "slyy-shot-latest" as SlyyShot.dmg, so
+# https://github.com/simplify-erp/slyy-releases/releases/download/slyy-shot-latest/SlyyShot.dmg is always the newest.
+# The repository's "Latest" badge stays with Slyy Desktop. Started by the release workflow (or by hand).
+on:
+  workflow_dispatch:
+    inputs:
+      version: { description: 'Slyy Shot version, e.g. 1.3.4', required: true }
+permissions: { contents: write }
+jobs:
+  link:
+    runs-on: ubuntu-latest
+    env: { GH_TOKEN: '${{ github.token }}', GH_REPO: '${{ github.repository }}', V: '${{ inputs.version }}' }
+    steps:
+      - run: |
+          echo "$V" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "invalid version '$V'"; exit 1; }
+          gh release download "slyy-snap-v$V" -p "SlyyShot-$V.dmg" -O SlyyShot.dmg
+          gh release view slyy-shot-latest >/dev/null 2>&1 || gh release create slyy-shot-latest --latest=false --title "Slyy Shot – latest" --notes "-"
+          gh release upload slyy-shot-latest SlyyShot.dmg --clobber
+          gh release edit slyy-shot-latest --latest=false --notes "Always the newest Slyy Shot (now $V): download **SlyyShot.dmg**, open it, drag Slyy Shot to Applications. Release notes: https://github.com/$GH_REPO/releases/tag/slyy-snap-v$V"
