@@ -2,6 +2,12 @@
 
 ## 1.2.0
 
+- After a capture: floating thumbnail with Edit / Copy / Show / close (click
+  the image to edit too). The editor opening right away is now an option
+  (Options > "Open Editor After Capture", off by default).
+- Editor: click the file name in the title bar to rename the file.
+- Editor: text is typed in place where you click (Return or click elsewhere
+  places it, Esc cancels).
 - Signed with a stable Slyy Snap certificate: macOS keeps the Screen Recording
   permission across updates (allow it one last time after this update).
 - Updates are only accepted if signed with the same certificate.

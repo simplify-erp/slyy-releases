@@ -55,7 +55,7 @@ final class Snapper {
                 self.lastSnap = url
                 if Settings.copyToClipboard { Clipboard.copy(url) }
                 if Settings.playSound { NSSound(named: "Tink")?.play() }
-                if Settings.openEditor { Editor.open(url) }
+                if Settings.openEditor { Editor.open(url) } else { SnapPreview.show(url) }
             }
         }
     }
@@ -88,6 +88,10 @@ final class Snapper {
         p.arguments = ["-c", "sleep 1; open \"$0\"", Bundle.main.bundlePath]
         try? p.run()
         NSApp.terminate(nil)
+    }
+
+    func fileRenamed(from old: URL, to new: URL) {
+        if lastSnap == old { lastSnap = new }
     }
 
     func editLast() {

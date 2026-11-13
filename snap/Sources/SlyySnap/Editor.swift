@@ -74,7 +74,7 @@ struct Mark {
 }
 
 @MainActor
-final class EditorCanvas: NSView {
+final class EditorCanvas: NSView, NSTextFieldDelegate {
     let image: NSImage
     private let pixelated: NSImage?
     private(set) var marks: [Mark] = []
@@ -291,20 +291,72 @@ final class EditorCanvas: NSView {
         }
     }
 
+    // MARK: Text (typed in place)
+
+    private var textField: NSTextField?
+    private var textCancelled = false
+
     private func addText(at p: CGPoint) {
-        let alert = NSAlert()
-        alert.messageText = "Add text"
-        alert.addButton(withTitle: "Add")
-        alert.addButton(withTitle: "Cancel")
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 24))
-        field.placeholderString = "Text"
-        alert.accessoryView = field
-        alert.window.initialFirstResponder = field
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        let s = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !s.isEmpty else { return }
         let size = Self.fontSize(lineWidth)
-        let mark = Mark(kind: .text(CGPoint(x: p.x, y: p.y - size / 2), s), color: color, width: lineWidth)
+        let font = NSFont.boldSystemFont(ofSize: size)
+        let height = ceil(size * 1.4)
+        let field = NSTextField(frame: NSRect(x: p.x - 3, y: p.y - height / 2, width: max(120, size * 6), height: height))
+        field.font = font
+        field.textColor = color
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .exterior
+        field.placeholderString = "Type text"
+        field.delegate = self
+        field.cell?.isScrollable = true
+        field.cell?.wraps = false
+        addSubview(field)
+        textField = field
+        textCancelled = false
+        window?.makeFirstResponder(field)
+    }
+
+    /// End text entry (places the text unless cancelled); used before save/copy.
+    func finishText() {
+        if textField != nil { window?.makeFirstResponder(self) }
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        guard let field = textField, let font = field.font else { return }
+        let w = (field.stringValue as NSString).size(withAttributes: [.font: font]).width + 24
+        field.frame.size.width = min(max(120, w), max(120, bounds.width - field.frame.minX))
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        if selector == #selector(NSResponder.cancelOperation(_:)) {
+            textCancelled = true
+            window?.makeFirstResponder(self)
+            return true
+        }
+        if selector == #selector(NSResponder.insertNewline(_:)) {
+            window?.makeFirstResponder(self)
+            return true
+        }
+        return false
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) {
+        guard let field = textField else { return }
+        textField = nil
+        let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fieldColor = field.textColor ?? color
+        let fontSize = field.font?.pointSize ?? Self.fontSize(lineWidth)
+        let frame = field.frame
+        field.removeFromSuperview()
+        if textCancelled || text.isEmpty {
+            needsDisplay = true
+            return
+        }
+        // Same spot as typed: text field inset 2 pt, line box vertically centered.
+        let lineHeight = NSLayoutManager().defaultLineHeight(for: NSFont.boldSystemFont(ofSize: fontSize))
+        let at = CGPoint(x: frame.minX + 2, y: frame.minY + max(0, (frame.height - lineHeight) / 2))
+        let width = (fontSize - 12) / 4
+        let mark = Mark(kind: .text(at, text), color: fieldColor, width: width)
         commit { marks.append(mark) }
     }
 
@@ -342,8 +394,10 @@ final class EditorCanvas: NSView {
 }
 
 @MainActor
-final class Editor: NSObject, NSWindowDelegate {
+final class Editor: NSObject, NSWindowDelegate, NSPopoverDelegate {
     private static var editors: [Editor] = []
+    /// Called after a file was renamed in an editor (old URL, new URL).
+    static var onRename: ((URL, URL) -> Void)?
 
     static func open(_ url: URL) {
         if let existing = editors.first(where: { $0.url == url }) {
@@ -369,7 +423,7 @@ final class Editor: NSObject, NSWindowDelegate {
     }
 
     private(set) var url: URL
-    let window: NSWindow
+    let window: EditorWindow
     private let canvas: EditorCanvas
     private let scroll = NSScrollView()
     private let tools = NSSegmentedControl()
@@ -380,7 +434,7 @@ final class Editor: NSObject, NSWindowDelegate {
     private init(url: URL, image: NSImage) {
         self.url = url
         canvas = EditorCanvas(image: image)
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+        window = EditorWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
                           styleMask: [.titled, .closable, .miniaturizable, .resizable],
                           backing: .buffered, defer: false)
         super.init()
@@ -392,6 +446,7 @@ final class Editor: NSObject, NSWindowDelegate {
         buildUI()
         canvas.onChange = { [weak self] in self?.updateTitle() }
         canvas.onToolChange = { [weak self] t in self?.tools.selectedSegment = t.rawValue }
+        window.onTitleClick = { [weak self] rect in self?.showRename(at: rect) }
     }
 
     private func buildUI() {
@@ -506,12 +561,14 @@ final class Editor: NSObject, NSWindowDelegate {
     }
 
     @objc func copy(_ sender: Any?) {
+        canvas.finishText()
         guard let png = canvas.renderedPNG() else { return }
         Clipboard.copy(png: png, file: nil)
         NSSound(named: "Tink")?.play()
     }
 
     @objc func saveDocument(_ sender: Any?) {
+        canvas.finishText()
         if ["png"].contains(url.pathExtension.lowercased()) {
             write(to: url)
         } else {
@@ -554,6 +611,7 @@ final class Editor: NSObject, NSWindowDelegate {
     // MARK: NSWindowDelegate
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        canvas.finishText()
         guard isDirty else { return true }
         let alert = NSAlert()
         alert.messageText = "Save changes to \(url.lastPathComponent)?"
@@ -572,7 +630,126 @@ final class Editor: NSObject, NSWindowDelegate {
         }
     }
 
+    // MARK: Rename (click on the title)
+
+    private var renamePopover: NSPopover?
+
+    private func showRename(at rect: NSRect) {
+        guard renamePopover == nil, let frameView = window.contentView?.superview else { return }
+        let field = NSTextField(string: url.deletingPathExtension().lastPathComponent)
+        field.frame = NSRect(x: 12, y: 12, width: 240, height: 24)
+        field.target = self
+        field.action = #selector(renameCommitted(_:))
+        let ext = NSTextField(labelWithString: url.pathExtension.isEmpty ? "" : "." + url.pathExtension)
+        ext.frame = NSRect(x: 256, y: 15, width: 44, height: 18)
+        ext.textColor = .secondaryLabelColor
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 48))
+        view.addSubview(field)
+        view.addSubview(ext)
+        let controller = NSViewController()
+        controller.view = view
+        let popover = NSPopover()
+        popover.contentViewController = controller
+        popover.behavior = .transient
+        popover.delegate = self
+        renamePopover = popover
+        popover.show(relativeTo: rect, of: frameView, preferredEdge: .minY)
+        window.makeFirstResponder(field)
+        field.currentEditor()?.selectAll(nil)
+    }
+
+    @objc private func renameCommitted(_ sender: NSTextField) {
+        renamePopover?.close()
+        rename(to: sender.stringValue)
+    }
+
+    private func rename(to newName: String) {
+        var base = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+        if !url.pathExtension.isEmpty, base.lowercased().hasSuffix("." + url.pathExtension.lowercased()) {
+            base = String(base.dropLast(url.pathExtension.count + 1))
+        }
+        guard !base.isEmpty, !base.hasPrefix(".") else { return }
+        var target = url.deletingLastPathComponent().appendingPathComponent(base)
+        if !url.pathExtension.isEmpty { target.appendPathExtension(url.pathExtension) }
+        guard target.path != url.path else { return }
+        let onlyCaseChanges = target.path.lowercased() == url.path.lowercased()
+        if !onlyCaseChanges, FileManager.default.fileExists(atPath: target.path) {
+            Alerts.info("Cannot rename", "\"\(target.lastPathComponent)\" already exists in this folder.")
+            return
+        }
+        do {
+            try FileManager.default.moveItem(at: url, to: target)
+        } catch {
+            Alerts.info("Cannot rename", error.localizedDescription)
+            return
+        }
+        let old = url
+        url = target
+        window.title = target.lastPathComponent
+        window.representedURL = target
+        Editor.onRename?(old, target)
+    }
+
     func windowWillClose(_ notification: Notification) {
         Editor.editors.removeAll { $0 === self }
+    }
+}
+
+extension Editor {
+    func popoverDidClose(_ notification: Notification) {
+        renamePopover = nil
+        window.makeFirstResponder(canvas)
+    }
+}
+
+/// Editor window that reports a single click on its title (not a drag, not a
+/// double-click) with the title's rectangle in window coordinates.
+@MainActor
+final class EditorWindow: NSWindow {
+    var onTitleClick: ((NSRect) -> Void)?
+    private var pending: (origin: NSPoint, rect: NSRect)?
+    private var clickWork: DispatchWorkItem?
+
+    private func titleRect() -> NSRect {
+        let layout = contentLayoutRect
+        let barHeight = frame.height - layout.maxY
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.titleBarFont(ofSize: 0)]
+        let textWidth = (title as NSString).size(withAttributes: attrs).width
+        let width = min(frame.width - 160, textWidth + (representedURL == nil ? 16 : 40))
+        return NSRect(x: (frame.width - width) / 2, y: layout.maxY, width: width, height: barHeight)
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown {
+            clickWork?.cancel()
+            clickWork = nil
+            pending = nil
+            let rect = titleRect()
+            if event.clickCount == 1, event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty,
+               rect.contains(event.locationInWindow) {
+                pending = (frame.origin, rect)
+            }
+        }
+        super.sendEvent(event)
+        switch event.type {
+        case .leftMouseDown where pending != nil && NSEvent.pressedMouseButtons & 1 == 0:
+            finishTitleClick() // the titlebar's own tracking loop consumed the mouse-up
+        case .leftMouseUp where pending != nil:
+            finishTitleClick()
+        default:
+            break
+        }
+    }
+
+    private func finishTitleClick() {
+        guard let p = pending else { return }
+        pending = nil
+        guard frame.origin == p.origin else { return } // the window was dragged
+        // Wait out a possible double-click (zoom).
+        let work = DispatchWorkItem { [weak self] in self?.onTitleClick?(p.rect) }
+        clickWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: work)
     }
 }

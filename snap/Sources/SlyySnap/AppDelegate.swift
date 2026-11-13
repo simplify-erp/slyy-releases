@@ -13,6 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Settings.registerDefaults()
         updater.cleanUp()
         NSApp.mainMenu = Self.mainMenu()
+        let snapperForRename = snapper
+        Editor.onRename = { old, new in snapperForRename.fileRenamed(from: old, to: new) }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
