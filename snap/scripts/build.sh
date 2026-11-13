@@ -20,6 +20,17 @@ app="dist/Slyy Snap.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/SlyySnap"
 sed "s/__VERSION__/$ver/g" Resources/Info.plist >"$app/Contents/Info.plist"
+
+# App icon (Slyy logo, 1024 px PNG) -> AppIcon.icns
+iconset=dist/AppIcon.iconset
+mkdir -p "$iconset"
+for s in 16 32 128 256 512; do
+	sips -z "$s" "$s" Resources/AppIcon.png --out "$iconset/icon_${s}x${s}.png" >/dev/null
+	d=$((s * 2))
+	sips -z "$d" "$d" Resources/AppIcon.png --out "$iconset/icon_${s}x${s}@2x.png" >/dev/null
+done
+iconutil -c icns "$iconset" -o "$app/Contents/Resources/AppIcon.icns"
+rm -rf "$iconset"
 plutil -lint "$app/Contents/Info.plist"
 
 
