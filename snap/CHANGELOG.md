@@ -1,5 +1,13 @@
 # Slyy Snap changelog
 
+## 1.2.1
+
+- Screen Recording: if an update made macOS forget the permission (the old
+  entry stays switched on but no longer applies), Slyy Snap removes the stale
+  entry and asks again; switch it on once and choose "Quit & Reopen".
+- No capture without the permission (it would only record the wallpaper);
+  instead a short explanation with a button to System Settings.
+
 ## 1.2.0
 
 - Snaps are named slyy-00001.png, slyy-00002.png, … (no spaces, no date;

@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         Settings.registerDefaults()
         updater.cleanUp()
+        if CGPreflightScreenCaptureAccess() { Settings.hadScreenAccess = true }
         NSApp.mainMenu = Self.mainMenu()
         let snapperForRename = snapper
         Editor.onRename = { old, new in snapperForRename.fileRenamed(from: old, to: new) }

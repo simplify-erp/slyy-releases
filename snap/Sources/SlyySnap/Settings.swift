@@ -48,6 +48,12 @@ enum Settings {
         set { d.set(newValue, forKey: "autoUpdate") }
     }
 
+    /// Screen Recording was granted at some point (detects a grant lost by an update).
+    static var hadScreenAccess: Bool {
+        get { d.bool(forKey: "hadScreenAccess") }
+        set { d.set(newValue, forKey: "hadScreenAccess") }
+    }
+
     /// Highest snap number used (slyy-NNNNN.png).
     static var lastSnapNumber: Int {
         get { d.integer(forKey: "lastSnapNumber") }
