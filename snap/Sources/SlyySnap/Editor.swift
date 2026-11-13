@@ -648,7 +648,7 @@ final class Editor: NSObject, NSWindowDelegate, NSPopoverDelegate {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.png]
         panel.directoryURL = url.deletingLastPathComponent()
-        panel.nameFieldStringValue = url.deletingPathExtension().lastPathComponent + " edited.png"
+        panel.nameFieldStringValue = url.deletingPathExtension().lastPathComponent + "-edited.png"
         panel.beginSheetModal(for: window) { [weak self] response in
             guard let self, response == .OK, let target = panel.url else { return }
             self.write(to: target)

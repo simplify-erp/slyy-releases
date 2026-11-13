@@ -28,7 +28,7 @@ final class Snapper {
             Alerts.info("Cannot create snap folder", "\(folder.path)\n\n\(error.localizedDescription)")
             return
         }
-        let url = folder.appendingPathComponent(Self.fileName())
+        let (url, number) = Self.nextSnap(in: folder)
         var args = ["-x", "-t", "png"] // -x: no system sound (we play our own)
         switch mode {
         case .area: args.append("-i") // drag a rectangle; Space toggles window mode, Esc cancels
@@ -52,6 +52,7 @@ final class Snapper {
                 self.busy = false
                 // No file: the user pressed Esc.
                 guard FileManager.default.fileExists(atPath: url.path) else { return }
+                Settings.lastSnapNumber = max(Settings.lastSnapNumber, number)
                 self.lastSnap = url
                 if Settings.copyToClipboard { Clipboard.copy(url) }
                 if Settings.playSound { NSSound(named: "Tink")?.play() }
@@ -122,11 +123,24 @@ final class Snapper {
         }
     }
 
-    private static func fileName() -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
-        return "Snap \(f.string(from: Date())).png"
+    /// Next free name slyy-00001.png, slyy-00002.png, …: one above both the
+    /// highest number used so far and the highest slyy-NNNNN file in the folder,
+    /// so numbers are never reused (even after deleting or renaming snaps).
+    private static func nextSnap(in folder: URL) -> (URL, Int) {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        let highestInFolder = names.compactMap { name -> Int? in
+            guard name.hasPrefix("slyy-"), name.lowercased().hasSuffix(".png") else { return nil }
+            let digits = name.dropFirst(5).dropLast(4)
+            guard !digits.isEmpty, digits.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+            return Int(digits)
+        }.max() ?? 0
+        var n = max(highestInFolder, Settings.lastSnapNumber) + 1
+        var url = folder.appendingPathComponent(String(format: "slyy-%05d.png", n))
+        while FileManager.default.fileExists(atPath: url.path) {
+            n += 1
+            url = folder.appendingPathComponent(String(format: "slyy-%05d.png", n))
+        }
+        return (url, n)
     }
 }
 

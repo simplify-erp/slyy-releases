@@ -48,6 +48,12 @@ enum Settings {
         set { d.set(newValue, forKey: "autoUpdate") }
     }
 
+    /// Highest snap number used (slyy-NNNNN.png).
+    static var lastSnapNumber: Int {
+        get { d.integer(forKey: "lastSnapNumber") }
+        set { d.set(newValue, forKey: "lastSnapNumber") }
+    }
+
     static var skippedVersion: String? {
         get { d.string(forKey: "skippedVersion") }
         set { d.set(newValue, forKey: "skippedVersion") }

@@ -2,6 +2,8 @@
 
 ## 1.2.0
 
+- Snaps are named slyy-00001.png, slyy-00002.png, … (no spaces, no date;
+  numbers are never reused).
 - After a capture: floating thumbnail with Edit / Copy / Show / close (click
   the image to edit too). The editor opening right away is now an option
   (Options > "Open Editor After Capture", off by default).
@@ -9,9 +11,9 @@
 - Editor: Move tool (V): drag any arrow, box, text, highlight … to move it.
 - Editor: text is typed in place where you click (Return or click elsewhere
   places it, Esc cancels).
-- Signed with a stable Slyy Snap certificate: macOS keeps the Screen Recording
-  permission across updates (allow it one last time after this update).
-- Updates are only accepted if signed with the same certificate.
+- Prepared for a stable signing certificate (keeps the Screen Recording
+  permission across updates once release builds are signed with it); signed
+  builds then only accept updates signed with the same certificate.
 - Screen Recording prompt at most once per launch; new Options >
   "Reset Screen Recording Permission…" for a stuck entry.
 
