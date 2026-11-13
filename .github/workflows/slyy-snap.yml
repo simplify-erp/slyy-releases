@@ -1,7 +1,7 @@
-name: Slyy Snap release
+name: Slyy Shot release
 
 # Builds snap/ on macOS and publishes release slyy-snap-v<version> with
-# SlyySnap-<version>.dmg + .zip + SHA256SUMS. Never takes the "Latest" badge
+# SlyyShot-<version>.dmg + .zip + SHA256SUMS. Never takes the "Latest" badge
 # (that stays with Slyy Desktop).
 #
 # Release: bump snap/CHANGELOG.md, then either push a tag
@@ -10,11 +10,11 @@ name: Slyy Snap release
 #
 # Signing + notarization (repository secrets; without them: ad-hoc signed):
 #   SNAP_SIGN_P12           base64 of a .p12 with a code signing certificate +
-#                           private key: the self-signed "Slyy Snap Code Signing"
+#                           private key: the self-signed "Slyy Shot Code Signing"
 #                           (stable signature, no notarization) or a Developer ID
 #                           Application certificate (also notarizable)
 #   SNAP_SIGN_P12_PASSWORD  its export password
-#   SNAP_SIGN_IDENTITY      certificate name, e.g. "Slyy Snap Code Signing" or
+#   SNAP_SIGN_IDENTITY      certificate name, e.g. "Slyy Shot Code Signing" or
 #                           "Developer ID Application: <Name> (<TEAMID>)"
 # Switching certificates: set allowedDeveloperTeam in Updater.swift and release
 # that with the old certificate first, or installed copies refuse the update.
@@ -72,14 +72,14 @@ jobs:
         if: inputs.dry_run && inputs.test_signing
         run: |
           cd "$RUNNER_TEMP"
-          printf '[req]\ndistinguished_name=dn\nx509_extensions=ext\nprompt=no\n[dn]\nCN=Slyy Snap Test Signing\n[ext]\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=critical,codeSigning\n' >t.cnf
+          printf '[req]\ndistinguished_name=dn\nx509_extensions=ext\nprompt=no\n[dn]\nCN=Slyy Shot Test Signing\n[ext]\nbasicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=critical,codeSigning\n' >t.cnf
           openssl req -x509 -newkey rsa:2048 -nodes -keyout t.key -out t.pem -days 2 -config t.cnf
-          openssl pkcs12 -export -legacy -inkey t.key -in t.pem -name "Slyy Snap Test Signing" -passout pass:test -out t.p12 ||
-            openssl pkcs12 -export -inkey t.key -in t.pem -name "Slyy Snap Test Signing" -passout pass:test -out t.p12
+          openssl pkcs12 -export -legacy -inkey t.key -in t.pem -name "Slyy Shot Test Signing" -passout pass:test -out t.p12 ||
+            openssl pkcs12 -export -inkey t.key -in t.pem -name "Slyy Shot Test Signing" -passout pass:test -out t.p12
           {
             echo "TEST_SIGN_P12=$(base64 -i t.p12 | tr -d '\n')"
             echo "TEST_SIGN_P12_PASSWORD=test"
-            echo "TEST_SIGN_IDENTITY=Slyy Snap Test Signing"
+            echo "TEST_SIGN_IDENTITY=Slyy Shot Test Signing"
           } >>"$GITHUB_ENV"
 
       - name: Signing certificate (optional)
@@ -147,7 +147,7 @@ jobs:
           awk -v v="## $VERSION" '$0 == v { on = 1; next } /^## / { on = 0 } on' snap/CHANGELOG.md >"$RUNNER_TEMP/notes.md"
           {
             echo
-            echo "Install (macOS 13+): download **SlyySnap-$VERSION.dmg**, open it, drag Slyy Snap to Applications."
+            echo "Install (macOS 13+): download **SlyyShot-$VERSION.dmg**, open it, drag Slyy Shot to Applications."
             [ -n "$NOTARY_KEY_P8" ] || echo 'First launch: System Settings > Privacy & Security > "Open Anyway" (not notarized).'
             echo
             echo 'Or from Terminal (no Gatekeeper prompt):'
@@ -155,8 +155,8 @@ jobs:
             echo '    curl -fsSL https://raw.githubusercontent.com/simplify-erp/slyy-releases/main/snap-install.sh | sh'
           } >>"$RUNNER_TEMP/notes.md"
           gh release create "$tag" \
-            "snap/dist/SlyySnap-$VERSION.dmg" "snap/dist/SlyySnap-$VERSION.zip" snap/dist/SHA256SUMS \
-            --title "Slyy Snap $VERSION" \
+            "snap/dist/SlyyShot-$VERSION.dmg" "snap/dist/SlyySnap-$VERSION.zip" snap/dist/SHA256SUMS \
+            --title "Slyy Shot $VERSION" \
             --notes-file "$RUNNER_TEMP/notes.md" \
             --target "$GITHUB_SHA" \
             --latest=false

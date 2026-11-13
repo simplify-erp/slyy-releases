@@ -1,7 +1,9 @@
-# Slyy Snap changelog
+# Slyy Shot changelog (formerly Slyy Snap)
 
 ## 1.3.0
 
+- Renamed to Slyy Shot: the app renames itself to "Slyy Shot.app" and moves
+  ~/Pictures/Slyy Snap to ~/Pictures/Slyy Shot (permission and settings kept).
 - Editor: click any arrow, box, ellipse, pen line, highlight or pixelation to
   select it; drag to move; change its color or thickness in the toolbar;
   Delete removes it, Esc deselects.

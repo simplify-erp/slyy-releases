@@ -6,9 +6,7 @@ import Security
 // assets SlyySnap-X.Y.Z.zip + SHA256SUMS (see snap/scripts/build.sh).
 private let releasesAPI = URL(string: "https://api.github.com/repos/simplify-erp/slyy-releases/releases?per_page=100")!
 private let tagPrefix = "slyy-snap-v"
-/// Apple Developer ID team whose signature updates may also carry (set this
-/// before switching the release builds from the self-signed certificate to a
-/// Developer ID, so installed copies accept the switch). Empty: none.
+/// Developer ID team also accepted for updates (set before moving releases from the self-signed certificate to it).
 private let allowedDeveloperTeam = ""
 let installCommand = "curl -fsSL https://raw.githubusercontent.com/simplify-erp/slyy-releases/main/snap-install.sh | sh"
 
@@ -53,9 +51,7 @@ struct UpdateError: LocalizedError {
     var errorDescription: String? { message }
 }
 
-/// Self-updater: finds the newest slyy-snap release, downloads the zip, checks
-/// its SHA-256 against the release's SHA256SUMS, checks bundle id, version and
-/// code signature, then swaps the app bundle in place and relaunches.
+/// Self-updater: newest release -> SHA-256 (SHA256SUMS), bundle id, version and signature checks -> swap in place, relaunch.
 @MainActor
 final class Updater {
     private var checking = false
@@ -91,13 +87,13 @@ final class Updater {
             if userInitiated { Alerts.info("Update check failed", error.localizedDescription) }
         case .success(let found):
             guard let found, found.1 > current else {
-                if userInitiated { Alerts.info("Slyy Snap is up to date", "Version \(current) is the newest.") }
+                if userInitiated { Alerts.info("Slyy Shot is up to date", "Version \(current) is the newest.") }
                 return
             }
             let (release, version) = found
             if !userInitiated, Settings.skippedVersion == version.description { return }
             let alert = NSAlert()
-            alert.messageText = "Slyy Snap \(version) is available"
+            alert.messageText = "Slyy Shot \(version) is available"
             let notes = (release.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             alert.informativeText = "You have \(current).\(notes.isEmpty ? "" : "\n\n" + String(notes.prefix(800)))"
             alert.addButton(withTitle: "Install and Relaunch")
@@ -157,24 +153,21 @@ final class Updater {
         try zipData.write(to: zipFile)
         let out = work.appendingPathComponent("x", isDirectory: true)
         try run("/usr/bin/ditto", ["-x", "-k", zipFile.path, out.path])
-        let app = out.appendingPathComponent("Slyy Snap.app", isDirectory: true)
+        let app = out.appendingPathComponent("Slyy Snap.app", isDirectory: true) // zip keeps the pre-1.3 name
         guard let info = NSDictionary(contentsOf: app.appendingPathComponent("Contents/Info.plist")),
               info["CFBundleIdentifier"] as? String == "ai.slyy.snap",
               info["CFBundleShortVersionString"] as? String == version else {
-            throw UpdateError("The download is not Slyy Snap \(version); nothing installed.")
+            throw UpdateError("The download is not Slyy Shot \(version); nothing installed.")
         }
         try run("/usr/bin/codesign", ["--verify", "--deep", "--strict", app.path])
-        // Signed with a stable certificate (self-signed or Developer ID): accept
-        // only updates that satisfy this app's designated requirement.
+        // Stable signature (self-signed or Developer ID): only accept updates satisfying our designated requirement.
         if let requirement = updateRequirement() {
             try verifySignature(of: app, requirement: requirement)
         }
         return app
     }
 
-    /// The running app's designated requirement (plus the allowed Developer ID
-    /// team, if set); nil when ad-hoc signed (that requirement is the build's
-    /// own hash and changes with every build).
+    /// Our designated requirement (+ allowed Developer ID team); nil when ad-hoc signed (a per-build hash).
     nonisolated static func updateRequirement() -> String? {
         var code: SecCode?
         guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
@@ -218,9 +211,7 @@ final class Updater {
         }
     }
 
-    /// Stage the new bundle next to the old one (same volume), then let a small
-    /// detached shell script swap them once this process has exited, roll back
-    /// if the swap fails, and reopen the app.
+    /// Stage the new bundle next to the old one, then a detached script swaps them after we exit (rolls back on failure) and reopens.
     private func swapAndRelaunch(app: URL, staged: URL) {
         let fm = FileManager.default
         let next = URL(fileURLWithPath: app.path + ".new", isDirectory: true)

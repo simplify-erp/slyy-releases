@@ -4,8 +4,7 @@ enum CaptureMode {
     case area, window, screen
 }
 
-/// Takes screenshots with the system's /usr/sbin/screencapture, saves them as
-/// PNG to Settings.folder and (optionally) copies them to the clipboard.
+/// Screenshots via /usr/sbin/screencapture, saved as PNG to Settings.folder, optionally copied to the clipboard.
 @MainActor
 final class Snapper {
     private(set) var lastSnap: URL?
@@ -51,12 +50,8 @@ final class Snapper {
         if let lastSnap { Clipboard.copy(lastSnap) }
     }
 
-    /// Screen Recording permission. Without it screencapture only records the
-    /// desktop wallpaper, so we do not capture at all. If the app had the
-    /// permission before and lost it, an update replaced it with a build macOS
-    /// does not recognise (unsigned builds): the old entry in System Settings
-    /// stays switched on but no longer applies. Remove it, so the system prompt
-    /// adds a fresh one, and explain.
+    /// Without Screen Recording, screencapture only gets the wallpaper, so we do not capture. A grant lost by an update
+    /// (unsigned build: old entry stays on but no longer applies) is reset, so the system prompt adds a fresh entry.
     private func ensureScreenRecordingAccess() -> Bool {
         if CGPreflightScreenCaptureAccess() {
             Settings.hadScreenAccess = true
@@ -72,9 +67,9 @@ final class Snapper {
             return false
         }
         let alert = NSAlert()
-        alert.messageText = "Slyy Snap needs Screen Recording permission"
-        alert.informativeText = "Switch on Slyy Snap under System Settings > Privacy & Security > Screen Recording, "
-            + "then choose \"Quit & Reopen\".\n\nAfter an update, an older Slyy Snap entry may still be listed and "
+        alert.messageText = "Slyy Shot needs Screen Recording permission"
+        alert.informativeText = "Switch on Slyy Shot under System Settings > Privacy & Security > Screen Recording, "
+            + "then choose \"Quit & Reopen\".\n\nAfter an update, an older Slyy Shot entry may still be listed and "
             + "switched on: remove it with the − button, then add or switch on the current one."
         alert.addButton(withTitle: "Open System Settings")
         alert.addButton(withTitle: "Cancel")
@@ -86,13 +81,12 @@ final class Snapper {
         return false
     }
 
-    /// Remove a stale Screen Recording entry (e.g. one left by an older,
-    /// differently signed build), ask again and relaunch.
+    /// Remove a stale Screen Recording entry, ask again and relaunch.
     func resetScreenRecordingPermission() {
         let alert = NSAlert()
         alert.messageText = "Reset Screen Recording permission?"
-        alert.informativeText = "Use this if macOS keeps asking although Slyy Snap is switched on in System Settings. "
-            + "Slyy Snap removes its entry, asks again and relaunches: then switch it on once more."
+        alert.informativeText = "Use this if macOS keeps asking although Slyy Shot is switched on in System Settings. "
+            + "Slyy Shot removes its entry, asks again and relaunches: then switch it on once more."
         alert.addButton(withTitle: "Reset and Relaunch")
         alert.addButton(withTitle: "Cancel")
         NSApp.activate(ignoringOtherApps: true)
@@ -100,16 +94,12 @@ final class Snapper {
         do {
             try Updater.run("/usr/bin/tccutil", ["reset", "ScreenCapture", "ai.slyy.snap"])
         } catch {
-            Alerts.info("Reset failed", "\(error.localizedDescription)\n\nRemove Slyy Snap with the − button under "
+            Alerts.info("Reset failed", "\(error.localizedDescription)\n\nRemove Slyy Shot with the − button under "
                 + "System Settings > Privacy & Security > Screen Recording, then reopen it.")
             return
         }
         CGRequestScreenCaptureAccess()
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/bin/sh")
-        p.arguments = ["-c", "sleep 1; open \"$0\"", Bundle.main.bundlePath]
-        try? p.run()
-        NSApp.terminate(nil)
+        relaunch(Bundle.main.bundlePath)
     }
 
     func fileRenamed(from old: URL, to new: URL) {
@@ -144,9 +134,7 @@ final class Snapper {
         }
     }
 
-    /// Next free name slyy-00001.png, slyy-00002.png, …: one above both the
-    /// highest number used so far and the highest slyy-NNNNN file in the folder,
-    /// so numbers are never reused (even after deleting or renaming snaps).
+    /// Next free slyy-NNNNN.png above both the highest number used and the highest in the folder (never reused).
     private static func nextSnap(in folder: URL) -> (URL, Int) {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
         let highestInFolder = names.compactMap { name -> Int? in
@@ -166,8 +154,7 @@ final class Snapper {
 }
 
 enum Clipboard {
-    /// One pasteboard item with PNG + TIFF data and the file URL: pastes as an
-    /// image into chats/docs and as a file into Finder.
+    /// One pasteboard item with PNG + TIFF and the file URL: pastes as an image in apps and as a file in Finder.
     @MainActor
     static func copy(_ url: URL) {
         guard let data = try? Data(contentsOf: url) else { return }
@@ -197,4 +184,25 @@ enum Alerts {
         NSApp.activate(ignoringOtherApps: true)
         a.runModal()
     }
+}
+
+/// Quit and reopen the app at `path` a second later (after this process is gone).
+@MainActor func relaunch(_ path: String) {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/bin/sh")
+    p.arguments = ["-c", "sleep 1; open \"$0\"", path]
+    try? p.run()
+    NSApp.terminate(nil)
+}
+
+/// Rebrand (1.3.0): "Slyy Snap.app" -> "Slyy Shot.app" (updates arrive under the old name) and the
+/// default folder ~/Pictures/Slyy Snap -> Slyy Shot. Returns true when relaunching from the new name.
+@MainActor func migrateFromSlyySnap() -> Bool {
+    let fm = FileManager.default, app = Bundle.main.bundleURL, folder = Settings.folder
+    let oldFolder = folder.deletingLastPathComponent().appendingPathComponent("Slyy Snap")
+    if folder.lastPathComponent == "Slyy Shot", !fm.fileExists(atPath: folder.path) { try? fm.moveItem(at: oldFolder, to: folder) }
+    let renamed = app.deletingLastPathComponent().appendingPathComponent("Slyy Shot.app")
+    guard app.lastPathComponent == "Slyy Snap.app", (try? fm.moveItem(at: app, to: renamed)) != nil else { return false }
+    relaunch(renamed.path)
+    return true
 }

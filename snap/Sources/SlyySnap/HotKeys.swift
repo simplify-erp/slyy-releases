@@ -21,7 +21,7 @@ final class HotKeys {
         if status == noErr, let ref {
             refs.append(ref)
         } else {
-            NSLog("Slyy Snap: hotkey \(id) not registered (status \(status)); taken by another app?")
+            NSLog("Slyy Shot: hotkey \(id) not registered (status \(status)); taken by another app?")
         }
     }
 
